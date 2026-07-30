@@ -1,4 +1,26 @@
-const socket=io({autoConnect:false,reconnection:true,reconnectionAttempts:Infinity,reconnectionDelay:800});
+function realtimeSocket(){
+  const handlers=new Map();let ws=null,retry=null,active=false;
+  const dispatch=(event,data)=>(handlers.get(event)||[]).slice().forEach(fn=>fn(data));
+  const api={
+    connected:false,
+    on(event,fn){handlers.set(event,[...(handlers.get(event)||[]),fn]);return api},
+    once(event,fn){const wrapped=data=>{api.off(event,wrapped);fn(data)};return api.on(event,wrapped)},
+    off(event,fn){handlers.set(event,(handlers.get(event)||[]).filter(item=>item!==fn));return api},
+    emit(event,data){if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify({event,data}));return api},
+    connect(){
+      if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))return api;
+      active=true;clearTimeout(retry);
+      ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}/ws`);
+      ws.onopen=()=>{api.connected=true;dispatch("connect")};
+      ws.onmessage=e=>{try{const message=JSON.parse(e.data);dispatch(message.event,message.data)}catch{}};
+      ws.onclose=()=>{const wasConnected=api.connected;api.connected=false;if(wasConnected)dispatch("disconnect");if(active)retry=setTimeout(()=>api.connect(),900)};
+      return api
+    },
+    disconnect(){active=false;clearTimeout(retry);ws?.close();return api}
+  };
+  return api
+}
+const socket=realtimeSocket();
 const $=id=>document.getElementById(id);
 const screens=["landing","lobby","game"];
 const state={room:null,selfId:null,mode:"create",sound:localStorage.getItem("ss-sound")!=="off",compact:localStorage.getItem("ss-compact")==="on",rooms:[],filter:"all",lastPhase:null,lastRevealed:0};
