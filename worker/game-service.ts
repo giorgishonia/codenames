@@ -10,6 +10,11 @@ type Room = {
 
 const rooms = new Map<string, Room>();
 const clients = new Map<string, Client>();
+const STATE_SCHEMA = `CREATE TABLE IF NOT EXISTS realtime_state (
+  id INTEGER PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+)`;
 const WORDS = [
   "მთა","ზღვა","მზე","მთვარე","ვარსკვლავი","წვიმა","ქარი","თოვლი","ღრუბელი","ტყე",
   "მდინარე","ხიდი","კოშკი","სახლი","ქუჩა","ქალაქი","სოფელი","ბაღი","ყვავილი","ხე",
@@ -118,6 +123,25 @@ const finish = (room: Room, winner: string, reason: string) => {
   clients.forEach((client, clientId) => { if (client.room === room.code) send(clientId, "game-over", {winner, reason}); });
 };
 
+async function loadState(db: D1Database) {
+  await db.prepare(STATE_SCHEMA).run();
+  const row = await db.prepare("SELECT data FROM realtime_state WHERE id = 1").first<{data:string}>();
+  rooms.clear(); clients.clear();
+  if (!row?.data) return;
+  try {
+    const saved = JSON.parse(row.data);
+    for (const [code, room] of saved.rooms || []) rooms.set(code, room);
+    for (const [clientId, client] of saved.clients || []) clients.set(clientId, client);
+  } catch {}
+}
+
+async function saveState(db: D1Database) {
+  const data = JSON.stringify({rooms:[...rooms], clients:[...clients]});
+  await db.prepare(
+    "INSERT INTO realtime_state (id, data, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+  ).bind(data, Date.now()).run();
+}
+
 function handle(clientId: string, event: string, data: any) {
   if (event === "list-rooms") return send(clientId, "lobby-list", lobbyList());
   if (event === "create-room") {
@@ -219,29 +243,35 @@ function handle(clientId: string, event: string, data: any) {
   }
 }
 
-export async function handleGameRequest(request: Request): Promise<Response | null> {
+export async function handleGameRequest(request: Request, db: D1Database): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname === "/api/connect" && request.method === "POST") {
+    await loadState(db);
     const now = Date.now();
     clients.forEach((client, clientId) => { if (now - client.lastSeen > 120_000) clients.delete(clientId); });
     const clientId = id();
     clients.set(clientId, {queue:[], lastSeen:now});
+    await saveState(db);
     return Response.json({clientId});
   }
   if (url.pathname === "/api/event" && request.method === "POST") {
+    await loadState(db);
     const message = await request.json() as any;
     const client = clients.get(message?.clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
     client.lastSeen = Date.now();
     handle(message.clientId, message.event, message.data);
+    await saveState(db);
     return Response.json({ok:true});
   }
   if (url.pathname === "/api/poll" && request.method === "GET") {
+    await loadState(db);
     const clientId = url.searchParams.get("client") || "";
     const client = clients.get(clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
     client.lastSeen = Date.now();
     const queue = client.queue.splice(0, 100);
+    await saveState(db);
     return Response.json(queue, {headers:{"cache-control":"no-store"}});
   }
   return null;
