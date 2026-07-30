@@ -78,9 +78,9 @@
       <h2 id="modalTitle">ახალი ოთახი</h2>
       <p id="modalSubtitle">შეარჩიე აგენტის სახელი.</p>
       <label id="roomNameWrap">ოთახის სახელი<input id="roomNameInput" maxlength="28" placeholder="მაგ. პარასკევის თამაში"></label>
-      <label>შენი სახელი<input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="მაგ. ნინო" required></label>
+      <label id="nameWrap">შენი სახელი<input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="მაგ. ნინო"></label>
       <label id="codeWrap" hidden>ოთახის კოდი<input id="codeInput" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE"></label>
-      <label id="visibilityWrap" class="switch-row"><span><b>საჯარო ოთახი</b><small>გამოჩნდება საერთო ლობიში</small></span><input id="publicRoomInput" type="checkbox" checked></label>
+      <label id="visibilityWrap" class="switch-row" hidden><span><b>საჯარო ოთახი</b><small>გამოჩნდება საერთო ლობიში</small></span><input id="publicRoomInput" type="checkbox" checked></label>
       <button class="primary submit" id="entrySubmit" value="default">გაგრძელება →</button>
       <p class="form-error" id="formError"></p>
     </form>

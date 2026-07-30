@@ -21,24 +21,26 @@ function syncSettings(){
   document.body.classList.toggle("body-compact",state.compact)
 }
 function openEntry(mode,prefill=""){
-  state.mode=mode;
+  state.mode=mode;state.joinCode=prefill;
   $("modalTitle").textContent=mode==="create"?"ახალი ოთახი":"ოთახში შესვლა";
-  $("modalSubtitle").textContent=mode==="create"?"დაარქვი ოპერაციას სახელი და მოიწვიე მოთამაშეები.":"შეიყვანე შენი სახელი — კოდი უკვე მზადაა.";
-  $("roomNameWrap").hidden=mode!=="create";$("visibilityWrap").hidden=mode!=="create";$("codeWrap").hidden=mode==="create";
-  $("roomNameInput").required=mode==="create";$("codeInput").required=mode==="join";$("codeInput").value=prefill;
+  $("modalSubtitle").textContent=mode==="create"?"დაარქვი ოპერაციას სახელი.":"შეიყვანე შენი სახელი — შემდეგ ჯერზე დაგიმახსოვრებთ.";
+  $("roomNameWrap").hidden=mode!=="create";$("nameWrap").hidden=mode==="create";$("visibilityWrap").hidden=true;$("codeWrap").hidden=true;
+  $("roomNameInput").required=mode==="create";$("nameInput").required=mode==="join";$("codeInput").required=false;$("codeInput").value=prefill;
   $("nameInput").value=localStorage.getItem("ss-name")||"";$("formError").textContent="";
   $("entryModal").showModal();setTimeout(()=>$(mode==="create"?"roomNameInput":"nameInput").focus(),50)
 }
 function connectAnd(event,payload){if(!socket.connected){socket.connect();socket.once("connect",()=>socket.emit(event,payload))}else socket.emit(event,payload)}
 function enter(e){
   e.preventDefault();
-  const name=$("nameInput").value.trim(),code=$("codeInput").value.trim().toUpperCase(),roomName=$("roomNameInput").value.trim();
-  if(name.length<2)return $("formError").textContent="სახელი მინიმუმ 2 სიმბოლო უნდა იყოს.";
+  const roomName=$("roomNameInput").value.trim(),code=state.joinCode;
+  let name=state.mode==="join"?$("nameInput").value.trim():localStorage.getItem("ss-name");
+  if(state.mode==="join"&&name.length<2)return $("formError").textContent="სახელი მინიმუმ 2 სიმბოლო უნდა იყოს.";
   if(state.mode==="create"&&roomName.length<2)return $("formError").textContent="ოთახს მოკლე სახელი მაინც სჭირდება.";
+  if(!name){name=`მოთამაშე-${Math.floor(1000+Math.random()*9000)}`}
   localStorage.setItem("ss-name",name);
   const payload={name,reconnectToken:localStorage.getItem("ss-token")};
-  if(state.mode==="join"){if(code.length!==5)return $("formError").textContent="შეიყვანე 5-ნიშნა ოთახის კოდი.";payload.code=code}
-  else{payload.roomName=roomName;payload.isPublic=$("publicRoomInput").checked}
+  if(state.mode==="join"){if(!code||code.length!==5)return $("formError").textContent="ოთახის კოდი ვერ მოიძებნა.";payload.code=code}
+  else{payload.roomName=roomName;payload.isPublic=true}
   connectAnd(state.mode==="create"?"create-room":"join-room",payload)
 }
 function avatar(index,extra=""){return`<span class="agent-avatar ${extra}" style="background-position:${avatarPos[index%8]}"></span>`}
