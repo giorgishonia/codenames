@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111820">
+  <meta name="description" content="საიდუმლო სიტყვა — ქართული ონლაინ გუნდური სიტყვების თამაში">
+  <title>საიდუმლო სიტყვა</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="noise"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <section id="landing" class="landing">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="საიდუმლო სიტყვა — მთავარი">
+        <span class="brand-mark">სს</span>
+        <span>საიდუმლო სიტყვა</span>
+      </a>
+      <button class="icon-btn" id="soundBtn" aria-label="ხმის გამორთვა" title="ხმა">♫</button>
+    </header>
+
+    <main class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span></span> ქართული ონლაინ თამაში</div>
+        <h1>ერთი სიტყვა.<br><em>ათასი კავშირი.</em></h1>
+        <p>შეკრიბე მეგობრები, მიეცი გუნდს ზუსტი მინიშნება და იპოვე ყველა აგენტი — სანამ მეტოქე დაგასწრებს.</p>
+        <div class="hero-actions">
+          <button class="primary big" id="openCreate">შექმენი ოთახი <span>→</span></button>
+          <button class="secondary big" id="openJoin">შეუერთდი თამაშს</button>
+        </div>
+        <div class="trust-row">
+          <span>● რეალურ დროში</span><span>↻ ავტომატური დაბრუნება</span><span>♬ ხმოვანი ეფექტები</span>
+        </div>
+      </div>
+      <div class="hero-art" aria-label="საიდუმლო აგენტების ილუსტრაციები">
+        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
+        <div class="portrait p1"></div><div class="portrait p2"></div><div class="portrait p3"></div>
+        <div class="dossier"><b>სრულიად საიდუმლო</b><span>ოპერაცია: სიტყვა</span><i></i></div>
+        <div class="floating-card fc1">მინიშნება <b>ზღვა · 3</b></div>
+        <div class="floating-card fc2"><span class="dot red"></span> წითლები იწყებენ</div>
+      </div>
+    </main>
+
+    <div class="how">
+      <article><b>01</b><div><h3>შექმენი ლობი</h3><p>მიიღე 5-ნიშნა კოდი და გაუზიარე მეგობრებს.</p></div></article>
+      <article><b>02</b><div><h3>აირჩიე გუნდი</h3><p>გახდი ოპერატივი ან საიდუმლო ხელმძღვანელი.</p></div></article>
+      <article><b>03</b><div><h3>იპოვე აგენტები</h3><p>დააკავშირე სიტყვები ერთი ჭკვიანი მინიშნებით.</p></div></article>
+    </div>
+  </section>
+
+  <dialog id="entryModal" class="modal">
+    <form method="dialog" id="entryForm">
+      <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
+      <div class="modal-stamp">საიდუმლო არქივი</div>
+      <h2 id="modalTitle">ახალი ოთახი</h2>
+      <p id="modalSubtitle">შეარჩიე აგენტის სახელი.</p>
+      <label>შენი სახელი<input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="მაგ. ნინო" required></label>
+      <label id="codeWrap" hidden>ოთახის კოდი<input id="codeInput" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE"></label>
+      <button class="primary submit" id="entrySubmit" value="default">გაგრძელება →</button>
+      <p class="form-error" id="formError"></p>
+    </form>
+  </dialog>
+
+  <section id="lobby" class="lobby hidden">
+    <header class="game-header">
+      <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
+      <div class="room-pill">ოთახი <button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
+      <button class="secondary small" id="leaveLobby">გასვლა</button>
+    </header>
+    <main class="lobby-main">
+      <div class="lobby-intro">
+        <div class="eyebrow"><span></span> ოპერაციის ბრიფინგი</div>
+        <h2>აირჩიე შენი მხარე</h2>
+        <p>თითოეულ გუნდს სჭირდება ერთი ხელმძღვანელი. მას მთელი საიდუმლო რუკა ეცოდინება.</p>
+      </div>
+      <div class="teams-select">
+        <section class="team-select blue">
+          <div class="team-title"><span>ლურჯი გუნდი</span><b id="blueCount">0</b></div>
+          <div class="role-block"><h3>ხელმძღვანელი</h3><div id="blueSpymaster" class="slot"></div><button data-join="blue:spymaster">ადგილის დაკავება</button></div>
+          <div class="role-block"><h3>ოპერატივები</h3><div id="blueOperatives" class="players-list"></div><button data-join="blue:operative">გუნდში შესვლა</button></div>
+        </section>
+        <section class="team-select red">
+          <div class="team-title"><span>წითელი გუნდი</span><b id="redCount">0</b></div>
+          <div class="role-block"><h3>ხელმძღვანელი</h3><div id="redSpymaster" class="slot"></div><button data-join="red:spymaster">ადგილის დაკავება</button></div>
+          <div class="role-block"><h3>ოპერატივები</h3><div id="redOperatives" class="players-list"></div><button data-join="red:operative">გუნდში შესვლა</button></div>
+        </section>
+      </div>
+      <div class="lobby-footer">
+        <p id="lobbyHint">მინიმუმ 4 მოთამაშე და 2 ხელმძღვანელია საჭირო</p>
+        <button id="startGame" class="primary big" disabled>თამაშის დაწყება →</button>
+      </div>
+    </main>
+  </section>
+
+  <section id="game" class="game hidden">
+    <header class="game-header">
+      <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
+      <div class="turn-status"><span id="turnDot"></span><b id="turnText">ლურჯების სვლაა</b><small id="phaseText">ხელმძღვანელი ფიქრობს...</small></div>
+      <div class="header-actions"><button class="icon-btn" id="gameSoundBtn" aria-label="ხმა">♫</button><button class="secondary small" id="rulesBtn">წესები</button></div>
+    </header>
+
+    <main class="game-layout">
+      <aside class="side-panel blue-panel">
+        <div class="score-head"><span>ლურჯი</span><b id="blueScore">9</b></div>
+        <div id="blueTeamGame" class="game-players"></div>
+      </aside>
+
+      <section class="board-zone">
+        <div id="clueBanner" class="clue-banner hidden"><span>მინიშნება</span><b id="clueWord">—</b><i id="clueNumber">0</i></div>
+        <div id="board" class="board" aria-label="სიტყვების დაფა"></div>
+        <div class="control-dock">
+          <form id="clueForm" class="clue-form hidden">
+            <label><span>ერთი სიტყვა</span><input id="clueInput" maxlength="24" placeholder="მაგ. ზღვა" required></label>
+            <label class="number-label"><span>რაოდენობა</span><select id="clueCount"></select></label>
+            <button class="primary">მინიშნება →</button>
+          </form>
+          <div id="guessControls" class="guess-controls hidden"><p>აირჩიეთ სიტყვა — დარჩა <b id="guessesLeft">0</b> ცდა</p><button id="endTurn" class="secondary">სვლის დასრულება</button></div>
+          <p id="waitingControl" class="waiting-control">დაელოდეთ ხელმძღვანელის მინიშნებას...</p>
+        </div>
+      </section>
+
+      <aside class="side-panel red-panel">
+        <div class="score-head"><span>წითელი</span><b id="redScore">8</b></div>
+        <div id="redTeamGame" class="game-players"></div>
+        <div class="log-wrap"><h3>ოპერაციის ჟურნალი</h3><div id="gameLog" class="game-log"></div></div>
+      </aside>
+    </main>
+  </section>
+
+  <dialog id="rulesModal" class="modal rules-modal">
+    <form method="dialog">
+      <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
+      <div class="modal-stamp">საქმე № 25</div><h2>თამაშის წესები</h2>
+      <ol><li><b>ხელმძღვანელი</b> ამბობს მხოლოდ ერთ სიტყვას და რიცხვს.</li><li><b>ოპერატივები</b> ირჩევენ დაკავშირებულ ბარათებს — მაქსიმუმ რიცხვი + 1.</li><li>ნეიტრალური ან მეტოქის ბარათი სვლას ასრულებს.</li><li><b>შავი აგენტი</b> გუნდს დაუყოვნებლივ აგებინებს.</li></ol>
+      <button class="primary submit">გასაგებია</button>
+    </form>
+  </dialog>
+
+  <dialog id="resultModal" class="modal result-modal">
+    <form method="dialog">
+      <div id="resultSeal" class="result-seal">✓</div><h2 id="resultTitle">ოპერაცია დასრულებულია</h2><p id="resultText"></p>
+      <button class="primary submit" id="backToLobby">ლობიში დაბრუნება</button>
+    </form>
+  </dialog>
+</body>
+</html>
