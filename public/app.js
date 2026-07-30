@@ -1,22 +1,38 @@
 function realtimeSocket(){
-  const handlers=new Map();let ws=null,retry=null,active=false;
+  const handlers=new Map();let clientId=null,retry=null,active=false,polling=false;
   const dispatch=(event,data)=>(handlers.get(event)||[]).slice().forEach(fn=>fn(data));
+  const poll=async()=>{
+    if(!active||!clientId||polling)return;polling=true;
+    try{
+      const response=await fetch(`/api/poll?client=${encodeURIComponent(clientId)}`,{cache:"no-store"});
+      if(!response.ok)throw new Error("poll");
+      const messages=await response.json();messages.forEach(message=>dispatch(message.event,message.data))
+    }catch{
+      if(api.connected){api.connected=false;dispatch("disconnect")}
+    }finally{
+      polling=false;if(active)retry=setTimeout(poll,350)
+    }
+  };
   const api={
     connected:false,
     on(event,fn){handlers.set(event,[...(handlers.get(event)||[]),fn]);return api},
     once(event,fn){const wrapped=data=>{api.off(event,wrapped);fn(data)};return api.on(event,wrapped)},
     off(event,fn){handlers.set(event,(handlers.get(event)||[]).filter(item=>item!==fn));return api},
-    emit(event,data){if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify({event,data}));return api},
-    connect(){
-      if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))return api;
-      active=true;clearTimeout(retry);
-      ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}/ws`);
-      ws.onopen=()=>{api.connected=true;dispatch("connect")};
-      ws.onmessage=e=>{try{const message=JSON.parse(e.data);dispatch(message.event,message.data)}catch{}};
-      ws.onclose=()=>{const wasConnected=api.connected;api.connected=false;if(wasConnected)dispatch("disconnect");if(active)retry=setTimeout(()=>api.connect(),900)};
+    emit(event,data){
+      if(clientId)fetch("/api/event",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clientId,event,data})}).catch(()=>{});
       return api
     },
-    disconnect(){active=false;clearTimeout(retry);ws?.close();return api}
+    async connect(){
+      if(api.connected)return api;
+      active=true;clearTimeout(retry);
+      try{
+        const response=await fetch("/api/connect",{method:"POST"});
+        if(!response.ok)throw new Error("connect");
+        clientId=(await response.json()).clientId;api.connected=true;dispatch("connect");poll()
+      }catch{retry=setTimeout(()=>api.connect(),900)}
+      return api
+    },
+    disconnect(){active=false;clearTimeout(retry);clientId=null;api.connected=false;return api}
   };
   return api
 }

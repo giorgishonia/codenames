@@ -1,4 +1,4 @@
-type Client = { room?: string; player?: string };
+type Client = { room?: string; player?: string; queue: {event:string; data?:unknown}[]; lastSeen:number };
 type Player = {
   id: string; token: string; name: string; avatar: number; team: "blue" | "red" | null;
   role: "spymaster" | "operative" | null; host: boolean; connected: boolean; lastChatAt?: number;
@@ -9,7 +9,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const clients = new Map<WebSocket, Client>();
+const clients = new Map<string, Client>();
 const WORDS = [
   "მთა","ზღვა","მზე","მთვარე","ვარსკვლავი","წვიმა","ქარი","თოვლი","ღრუბელი","ტყე",
   "მდინარე","ხიდი","კოშკი","სახლი","ქუჩა","ქალაქი","სოფელი","ბაღი","ყვავილი","ხე",
@@ -46,8 +46,9 @@ const newCode = () => {
   while (rooms.has(value));
   return value;
 };
-const send = (ws: WebSocket, event: string, data?: unknown) => {
-  try { ws.send(JSON.stringify({event, data})); } catch {}
+const send = (clientId: string, event: string, data?: unknown) => {
+  const client = clients.get(clientId);
+  if (client) client.queue.push({event, data});
 };
 const canStart = (room: Room) =>
   room.players.filter(player => player.connected).length >= 4 &&
@@ -76,12 +77,12 @@ const lobbyList = () => [...rooms.values()].filter(room => room.isPublic).map(ro
   avatars: room.players.filter(player => player.connected).slice(0,4).map(player => player.avatar),
   createdAt: room.createdAt
 })).sort((a,b) => b.createdAt - a.createdAt);
-const broadcastLobby = () => clients.forEach((_client, ws) => send(ws, "lobby-list", lobbyList()));
-const emitRoom = (room: Room) => clients.forEach((client, ws) => {
-  if (client.room === room.code && client.player) send(ws, "room-state", publicRoom(room, client.player));
+const broadcastLobby = () => clients.forEach((_client, clientId) => send(clientId, "lobby-list", lobbyList()));
+const emitRoom = (room: Room) => clients.forEach((client, clientId) => {
+  if (client.room === room.code && client.player) send(clientId, "room-state", publicRoom(room, client.player));
 });
-const found = (ws: WebSocket) => {
-  const client = clients.get(ws);
+const found = (clientId: string) => {
+  const client = clients.get(clientId);
   const room = client?.room ? rooms.get(client.room) : undefined;
   const player = room?.players.find(item => item.id === client?.player);
   return room && player ? {room, player} : null;
@@ -114,54 +115,46 @@ const switchTurn = (game: any) => {
 };
 const finish = (room: Room, winner: string, reason: string) => {
   room.game.winner = winner; emitRoom(room);
-  clients.forEach((client, ws) => { if (client.room === room.code) send(ws, "game-over", {winner, reason}); });
+  clients.forEach((client, clientId) => { if (client.room === room.code) send(clientId, "game-over", {winner, reason}); });
 };
 
-function disconnect(ws: WebSocket) {
-  const match = found(ws);
-  clients.delete(ws);
-  if (!match) return;
-  match.player.connected = false;
-  emitRoom(match.room); broadcastLobby();
-}
-
-function handle(ws: WebSocket, event: string, data: any) {
-  if (event === "list-rooms") return send(ws, "lobby-list", lobbyList());
+function handle(clientId: string, event: string, data: any) {
+  if (event === "list-rooms") return send(clientId, "lobby-list", lobbyList());
   if (event === "create-room") {
     const name = clean(data?.name, 18), roomName = clean(data?.roomName, 28);
-    if (name.length < 2) return send(ws, "error-message", "სახელი ძალიან მოკლეა.");
-    if (roomName.length < 2) return send(ws, "error-message", "ოთახს სახელი სჭირდება.");
+    if (name.length < 2) return send(clientId, "error-message", "სახელი ძალიან მოკლეა.");
+    if (roomName.length < 2) return send(clientId, "error-message", "ოთახს სახელი სჭირდება.");
     const room: Room = {code:newCode(), name:roomName, isPublic:data?.isPublic !== false, hostId:"", players:[], chat:[], game:null, createdAt:Date.now()};
     const player: Player = {id:id(), token:id(), name, avatar:random(8), team:null, role:null, host:true, connected:true};
     room.hostId = player.id; room.players.push(player); rooms.set(room.code, room);
-    clients.set(ws, {room:room.code, player:player.id});
-    send(ws, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
+    Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
+    send(clientId, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
     broadcastLobby(); return;
   }
   if (event === "join-room") {
     const room = rooms.get(clean(data?.code, 5).toUpperCase()), name = clean(data?.name, 18);
-    if (!room) return send(ws, "error-message", "ასეთი ოთახი ვერ მოიძებნა.");
-    if (name.length < 2) return send(ws, "error-message", "სახელი ძალიან მოკლეა.");
-    if (room.game) return send(ws, "error-message", "თამაში უკვე დაწყებულია — დასაბრუნებლად გამოიყენე შენახული ბმული.");
+    if (!room) return send(clientId, "error-message", "ასეთი ოთახი ვერ მოიძებნა.");
+    if (name.length < 2) return send(clientId, "error-message", "სახელი ძალიან მოკლეა.");
+    if (room.game) return send(clientId, "error-message", "თამაში უკვე დაწყებულია — დასაბრუნებლად გამოიყენე შენახული ბმული.");
     const player: Player = {id:id(), token:id(), name, avatar:room.players.length % 8, team:null, role:null, host:false, connected:true};
-    room.players.push(player); clients.set(ws, {room:room.code, player:player.id});
-    send(ws, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
+    room.players.push(player); Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
+    send(clientId, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
     emitRoom(room); broadcastLobby(); return;
   }
   if (event === "reconnect-room") {
     const room = rooms.get(clean(data?.code, 5).toUpperCase());
     const player = room?.players.find(item => item.token === data?.token);
     if (!room || !player) return;
-    player.connected = true; clients.set(ws, {room:room.code, player:player.id});
-    send(ws, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
+    player.connected = true; Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
+    send(clientId, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
     emitRoom(room); broadcastLobby(); return;
   }
-  const match = found(ws);
+  const match = found(clientId);
   if (!match) return;
   const {room, player} = match;
   if (event === "update-room-settings" && player.host) {
     const name = clean(data?.name, 28);
-    if (name.length < 2) return send(ws, "error-message", "ოთახს სახელი სჭირდება.");
+    if (name.length < 2) return send(clientId, "error-message", "ოთახს სახელი სჭირდება.");
     room.name = name; room.isPublic = data?.isPublic !== false; emitRoom(room); broadcastLobby();
   } else if (event === "choose-role" && !room.game) {
     if (["blue","red"].includes(data?.team) && ["spymaster","operative"].includes(data?.role)) {
@@ -181,17 +174,17 @@ function handle(ws: WebSocket, event: string, data: any) {
     player.lastChatAt = Date.now(); room.chat.push({id:id(), actor:player.name, playerId:player.id, team:player.team, text, time:Date.now()});
     room.chat = room.chat.slice(-50); emitRoom(room);
   } else if (event === "start-game") {
-    if (!player.host || !canStart(room)) return send(ws, "error-message", "გუნდები ჯერ მზად არ არიან.");
+    if (!player.host || !canStart(room)) return send(clientId, "error-message", "გუნდები ჯერ მზად არ არიან.");
     room.game = newGame(); emitRoom(room); broadcastLobby();
   } else if (event === "give-clue") {
     const game = room.game, word = clean(data?.word, 24).replace(/\s+/g, ""), count = Number(data?.count);
     if (!game || game.winner || player.role !== "spymaster" || player.team !== game.turn || game.phase !== "clue") return;
-    if (word.length < 2 || ![0,1,2,3,4,5,6,7,8,9,99].includes(count)) return send(ws, "error-message", "მინიშნება და რაოდენობა გადაამოწმე.");
+    if (word.length < 2 || ![0,1,2,3,4,5,6,7,8,9,99].includes(count)) return send(clientId, "error-message", "მინიშნება და რაოდენობა გადაამოწმე.");
     const invalid = game.board.some((card: any) => {
       const cardWord = card.word.toLowerCase(), clue = word.toLowerCase(), min = Math.min(cardWord.length, clue.length);
       return !card.revealed && (cardWord === clue || (min >= 4 && (cardWord.startsWith(clue) || clue.startsWith(cardWord))));
     });
-    if (invalid) return send(ws, "error-message", "დაფაზე არსებული სიტყვის ან მისი აშკარა ფორმის გამოყენება არ შეიძლება.");
+    if (invalid) return send(clientId, "error-message", "დაფაზე არსებული სიტყვის ან მისი აშკარა ფორმის გამოყენება არ შეიძლება.");
     game.clue = {word, count}; game.pendingGuess = null; game.guessesLeft = count === 0 || count === 99 ? 99 : count + 1; game.phase = "guess";
     game.log.push({actor:player.name, text:`მისცა მინიშნება „${word}“ · ${count === 99 ? "∞" : count}.`}); emitRoom(room);
   } else if (event === "suggest-card") {
@@ -219,26 +212,37 @@ function handle(ws: WebSocket, event: string, data: any) {
   } else if (event === "leave-room") {
     const index = room.players.findIndex(item => item.id === player.id);
     if (index >= 0) room.players.splice(index, 1);
-    clients.set(ws, {});
+    Object.assign(clients.get(clientId)!, {room:undefined, player:undefined});
     if (player.host && room.players.length) { room.players[0].host = true; room.hostId = room.players[0].id; }
     if (!room.players.length) rooms.delete(room.code); else emitRoom(room);
     broadcastLobby();
   }
 }
 
-export function handleGameRequest(request: Request): Response | null {
+export async function handleGameRequest(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/ws" || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return null;
-  const pair = new WebSocketPair();
-  const client = pair[0], server = pair[1];
-  server.accept(); clients.set(server, {});
-  server.addEventListener("message", event => {
-    try {
-      const message = JSON.parse(String(event.data));
-      handle(server, message.event, message.data);
-    } catch { send(server, "error-message", "მოთხოვნის დამუშავება ვერ მოხერხდა."); }
-  });
-  server.addEventListener("close", () => disconnect(server));
-  server.addEventListener("error", () => disconnect(server));
-  return new Response(null, {status:101, webSocket:client} as ResponseInit);
+  if (url.pathname === "/api/connect" && request.method === "POST") {
+    const now = Date.now();
+    clients.forEach((client, clientId) => { if (now - client.lastSeen > 120_000) clients.delete(clientId); });
+    const clientId = id();
+    clients.set(clientId, {queue:[], lastSeen:now});
+    return Response.json({clientId});
+  }
+  if (url.pathname === "/api/event" && request.method === "POST") {
+    const message = await request.json() as any;
+    const client = clients.get(message?.clientId);
+    if (!client) return Response.json({error:"expired"}, {status:410});
+    client.lastSeen = Date.now();
+    handle(message.clientId, message.event, message.data);
+    return Response.json({ok:true});
+  }
+  if (url.pathname === "/api/poll" && request.method === "GET") {
+    const clientId = url.searchParams.get("client") || "";
+    const client = clients.get(clientId);
+    if (!client) return Response.json({error:"expired"}, {status:410});
+    client.lastSeen = Date.now();
+    const queue = client.queue.splice(0, 100);
+    return Response.json(queue, {headers:{"cache-control":"no-store"}});
+  }
+  return null;
 }

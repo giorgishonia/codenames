@@ -29,7 +29,7 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    const gameResponse = handleGameRequest(request);
+    const gameResponse = await handleGameRequest(request);
     if (gameResponse) return gameResponse;
 
     if (url.pathname === "/_vinext/image") {
