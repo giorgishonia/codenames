@@ -101,12 +101,12 @@
       <div class="teams-select">
         <section class="team-select blue">
           <div class="team-title"><span>ლურჯი გუნდი</span><b id="blueCount">0</b></div>
-          <div class="role-block"><h3>ხელმძღვანელი</h3><div id="blueSpymaster" class="slot"></div><button data-join="blue:spymaster">ადგილის დაკავება</button></div>
+          <div class="role-block"><h3>ხელმძღვანელები</h3><div id="blueSpymaster" class="slot"></div><button data-join="blue:spymaster">ხელმძღვანელად შესვლა</button></div>
           <div class="role-block"><h3>ოპერატივები</h3><div id="blueOperatives" class="players-list"></div><button data-join="blue:operative">გუნდში შესვლა</button></div>
         </section>
         <section class="team-select red">
           <div class="team-title"><span>წითელი გუნდი</span><b id="redCount">0</b></div>
-          <div class="role-block"><h3>ხელმძღვანელი</h3><div id="redSpymaster" class="slot"></div><button data-join="red:spymaster">ადგილის დაკავება</button></div>
+          <div class="role-block"><h3>ხელმძღვანელები</h3><div id="redSpymaster" class="slot"></div><button data-join="red:spymaster">ხელმძღვანელად შესვლა</button></div>
           <div class="role-block"><h3>ოპერატივები</h3><div id="redOperatives" class="players-list"></div><button data-join="red:operative">გუნდში შესვლა</button></div>
         </section>
       </div>
@@ -139,7 +139,10 @@
             <label class="number-label"><span>რაოდენობა</span><select id="clueCount"></select></label>
             <button class="primary">მინიშნება →</button>
           </form>
-          <div id="guessControls" class="guess-controls hidden"><p>აირჩიეთ სიტყვა — დარჩა <b id="guessesLeft">0</b> ცდა</p><button id="endTurn" class="secondary">სვლის დასრულება</button></div>
+          <div id="guessControls" class="guess-controls hidden">
+            <p id="guessPrompt">ჯერ მონიშნეთ ბარათი — დარჩა <b id="guessesLeft">0</b> ცდა</p>
+            <div class="guess-actions"><button id="confirmGuess" class="primary" disabled>არჩევანის დადასტურება</button><button id="endTurn" class="secondary">სვლის დასრულება</button></div>
+          </div>
           <p id="waitingControl" class="waiting-control">დაელოდეთ ხელმძღვანელის მინიშნებას...</p>
         </div>
       </section>
@@ -156,7 +159,13 @@
     <form method="dialog">
       <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
       <div class="modal-stamp">საქმე № 25</div><h2>თამაშის წესები</h2>
-      <ol><li><b>ხელმძღვანელი</b> ამბობს მხოლოდ ერთ სიტყვას და რიცხვს.</li><li><b>ოპერატივები</b> ირჩევენ დაკავშირებულ ბარათებს — მაქსიმუმ რიცხვი + 1.</li><li>ნეიტრალური ან მეტოქის ბარათი სვლას ასრულებს.</li><li><b>შავი აგენტი</b> გუნდს დაუყოვნებლივ აგებინებს.</li></ol>
+      <div class="rules-content">
+        <section><h3>მიზანი და როლები</h3><p>ლურჯი და წითელი გუნდები ეჯიბრებიან ერთმანეთს. თითოეულ გუნდს სჭირდება მინიმუმ ერთი <b>ხელმძღვანელი</b> და ერთი <b>ოპერატივი</b>. დაფაზე 25 სიტყვაა. ხელმძღვანელები ხედავენ საიდუმლო ფერებს, ოპერატივები — არა.</p></section>
+        <section><h3>მინიშნება</h3><p>ხელმძღვანელი ამბობს მხოლოდ <b>ერთ სიტყვას და ერთ რიცხვს</b>. სიტყვა მნიშვნელობით უნდა უკავშირდებოდეს საკუთარი გუნდის ბარათებს. არ შეიძლება დაფაზე არსებული სიტყვის, მისი აშკარა ფორმის, მართლწერის, ასოების რაოდენობის ან ბარათის მდებარეობის გამოყენება.</p></section>
+        <section class="special-rules"><div><b>0</b><span>არცერთი საკუთარი ბარათი არ უკავშირდება მინიშნებას. გუნდს შეუზღუდავი ცდა აქვს.</span></div><div><b>∞</b><span>რამდენიმე ძველი ან ახალი ბარათია დაკავშირებული. გუნდს შეუზღუდავი ცდა აქვს.</span></div></section>
+        <section><h3>არჩევა და დადასტურება</h3><p>ოპერატივი ჯერ ერთხელ აჭერს ბარათს და მონიშნავს მას. მხოლოდ ცალკე ღილაკით დადასტურების შემდეგ იხსნება ბარათი. სწორი ფერი თამაშს აგრძელებს; მეტოქის ან ნეიტრალური ბარათი სვლას ასრულებს. მაქსიმუმი არის მინიშნების რიცხვი + 1.</p></section>
+        <section><h3>გამარჯვება და შავი აგენტი</h3><p>გუნდი იმარჯვებს, როცა ყველა საკუთარ აგენტს იპოვის. <b>შავი აგენტის</b> გახსნა დაუყოვნებლივ აგებინებს გუნდს.</p></section>
+      </div>
       <button class="primary submit">გასაგებია</button>
     </form>
   </dialog>

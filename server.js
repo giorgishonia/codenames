@@ -9,6 +9,12 @@ const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express(),server=http.createServer(app),io=new Server(server,{pingTimeout:20000,pingInterval:10000});
 const PORT=process.env.PORT||3000,rooms=new Map();
 const WORDS=["მთა","ზღვა","მზე","მთვარე","ვარსკვლავი","წვიმა","ქარი","თოვლი","ღრუბელი","ტყე","მდინარე","ხიდი","კოშკი","სახლი","ქუჩა","ქალაქი","სოფელი","ბაღი","ყვავილი","ხე","ფოთოლი","ვაშლი","ღვინო","პური","ყავა","ჩაი","სუფრა","წიგნი","კალამი","წერილი","გასაღები","საათი","სარკე","ფანჯარა","კარი","სკამი","მაგიდა","ხალიჩა","ტელეფონი","რადიო","მატარებელი","გემი","თვითმფრინავი","მანქანა","ველოსიპედი","გზა","რუკა","კომპასი","ოქრო","ვერცხლი","ბრილიანტი","გვირგვინი","მეფე","დედოფალი","რაინდი","დრაკონი","მზვერავი","ნიღაბი","ჩრდილი","საიდუმლო","სიზმარი","სიმღერა","ცეკვა","თეატრი","კინო","სცენა","ფოტო","ფერი","ხმა","სინათლე","ცეცხლი","წყალი","ყინული","ქვა","ქვიშა","კუნძული","უდაბნო","ოკეანე","ნავსადგური","ბაზარი","მუზეუმი","სკოლა","ექიმი","მასწავლებელი","მზარეული","მფრინავი","მეკარე","ბურთი","ჭადრაკი","თასი","მედალი","ბილეთი","საჩუქარი","დღე","ღამე","გაზაფხული","ზაფხული","შემოდგომა","ზამთარი"];
+const CARD_ART={
+  blue:["blue-0.webp","blue-7.webp","blue-8.webp","blue-11.webp","blue-13.webp","blue-19.webp","blue-21.webp","blue-23.webp","blue-24.webp"],
+  red:["red-1.webp","red-8.webp","red-10.webp","red-13.webp","red-22.webp","red-23.webp","red-24.webp"],
+  neutral:["neutral-0.webp","neutral-1.webp","neutral-2.webp","neutral-3.webp","neutral-4.webp","neutral-5.webp","neutral-6.webp","neutral-7.webp","neutral-8.webp","neutral-9.webp"],
+  assassin:["black-0.webp"]
+};
 const code=()=>{let s="";const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";do{s=Array.from({length:5},()=>chars[crypto.randomInt(chars.length)]).join("")}while(rooms.has(s));return s};
 const token=()=>crypto.randomBytes(18).toString("base64url");
 const clean=(v,n=24)=>String(v??"").replace(/[<>]/g,"").trim().slice(0,n);
@@ -25,9 +31,10 @@ function emitRoom(room){for(const p of room.players)if(p.socketId)io.to(p.socket
 function findPlayer(socket){const room=rooms.get(socket.data.room);return room&&[room,room.players.find(p=>p.id===socket.data.player)]}
 function newGame(){
   const first=crypto.randomInt(2)?"blue":"red",types=[...Array(first==="blue"?9:8).fill("blue"),...Array(first==="red"?9:8).fill("red"),...Array(7).fill("neutral"),"assassin"],words=shuffle(WORDS).slice(0,25);
-  return{turn:first,phase:"clue",clue:null,guessesLeft:0,remaining:{blue:types.filter(x=>x==="blue").length,red:types.filter(x=>x==="red").length},board:shuffle(types).map((type,i)=>({word:words[i],type,revealed:false})),log:[{actor:"სისტემა",text:`${first==="blue"?"ლურჯი":"წითელი"} გუნდი იწყებს ოპერაციას.`}]}
+  const artPools=Object.fromEntries(Object.entries(CARD_ART).map(([type,items])=>[type,shuffle(items)])),artIndex={blue:0,red:0,neutral:0,assassin:0};
+  return{turn:first,phase:"clue",clue:null,pendingGuess:null,guessesLeft:0,remaining:{blue:types.filter(x=>x==="blue").length,red:types.filter(x=>x==="red").length},board:shuffle(types).map((type,i)=>({word:words[i],type,art:artPools[type][artIndex[type]++%artPools[type].length],revealed:false})),log:[{actor:"სისტემა",text:`${first==="blue"?"ლურჯი":"წითელი"} გუნდი იწყებს ოპერაციას.`}]}
 }
-function switchTurn(g){g.turn=g.turn==="blue"?"red":"blue";g.phase="clue";g.clue=null;g.guessesLeft=0;g.log.push({actor:"სისტემა",text:`ახლა ${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა.`})}
+function switchTurn(g){g.turn=g.turn==="blue"?"red":"blue";g.phase="clue";g.clue=null;g.pendingGuess=null;g.guessesLeft=0;g.log.push({actor:"სისტემა",text:`ახლა ${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა.`})}
 function win(room,winner,reason){room.game.winner=winner;emitRoom(room);io.to(room.code).emit("game-over",{winner,reason})}
 
 app.use(express.static(path.join(__dirname,"public")));
@@ -55,7 +62,6 @@ io.on("connection",socket=>{
   });
   socket.on("choose-role",data=>{
     const found=findPlayer(socket);if(!found)return;const [room,p]=found,team=["blue","red"].includes(data?.team)&&data.team,role=["spymaster","operative"].includes(data?.role)&&data.role;if(!team||!role||room.game)return;
-    if(role==="spymaster"&&room.players.some(x=>x.id!==p.id&&x.team===team&&x.role===role))return socket.emit("error-message","ამ გუნდს უკვე ჰყავს ხელმძღვანელი.");
     p.team=team;p.role=role;emitRoom(room);broadcastLobbyList()
   });
   socket.on("start-game",()=>{
@@ -64,13 +70,18 @@ io.on("connection",socket=>{
   });
   socket.on("give-clue",data=>{
     const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game,word=clean(data?.word,24).replace(/\s+/g,""),count=Number(data?.count);if(!g||g.winner||p.role!=="spymaster"||p.team!==g.turn||g.phase!=="clue")return;
-    if(word.length<2||!([1,2,3,4,5,6,7,8,9,99].includes(count)))return socket.emit("error-message","მინიშნება და რაოდენობა გადაამოწმე.");
+    if(word.length<2||!([0,1,2,3,4,5,6,7,8,9,99].includes(count)))return socket.emit("error-message","მინიშნება და რაოდენობა გადაამოწმე.");
     if(g.board.some(c=>!c.revealed&&c.word.toLowerCase()===word.toLowerCase()))return socket.emit("error-message","დაფაზე არსებული სიტყვის გამოყენება არ შეიძლება.");
-    g.clue={word,count};g.guessesLeft=count===99?99:count+1;g.phase="guess";g.log.push({actor:p.name,text:`მისცა მინიშნება „${word}“ · ${count===99?"∞":count}.`});emitRoom(room)
+    g.clue={word,count};g.pendingGuess=null;g.guessesLeft=count===0||count===99?99:count+1;g.phase="guess";g.log.push({actor:p.name,text:`მისცა მინიშნება „${word}“ · ${count===99?"∞":count}.`});emitRoom(room)
+  });
+  socket.on("suggest-card",data=>{
+    const found=findPlayer(socket);if(!found)return;const[room,p]=found,g=room.game,i=Number(data?.index),card=g?.board[i];
+    if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
+    g.pendingGuess={index:i,actor:p.name};emitRoom(room)
   });
   socket.on("guess-card",data=>{
-    const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game,i=Number(data?.index),card=g?.board[i];if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
-    card.revealed=true;g.log.push({actor:p.name,text:`გახსნა „${card.word}“ — ${card.type==="blue"?"ლურჯი":card.type==="red"?"წითელი":card.type==="neutral"?"ნეიტრალური":"შავი აგენტი"}.`});
+    const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game,i=g?.pendingGuess?.index,card=g?.board[i];if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
+    g.pendingGuess=null;card.revealed=true;g.log.push({actor:p.name,text:`დაადასტურა „${card.word}“ — ${card.type==="blue"?"ლურჯი":card.type==="red"?"წითელი":card.type==="neutral"?"ნეიტრალური":"შავი აგენტი"}.`});
     if(card.type==="assassin")return win(room,p.team==="blue"?"red":"blue","შავი აგენტი გაიხსნა — ოპერაცია ჩავარდა.");
     if(card.type==="blue"||card.type==="red"){g.remaining[card.type]--;if(g.remaining[card.type]===0)return win(room,card.type,"გუნდმა ყველა თავისი აგენტი იპოვა.")}
     if(card.type!==p.team)return switchTurn(g),emitRoom(room);

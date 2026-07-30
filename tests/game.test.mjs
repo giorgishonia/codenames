@@ -52,6 +52,24 @@ test("საჯარო ლობი, 7 მოთამაშე, დაწყ�
     assert.equal(started.game.board.every(card=>card.type===null),true,"ოპერატივმა საიდუმლო რუკა არ უნდა მიიღოს");
     assert.equal(started.game.remaining.blue+started.game.remaining.red,17);
 
+    const activeSpy=started.game.turn==="blue"?clients[0]:clients[2];
+    const activeOperative=started.game.turn==="blue"?clients[1]:clients[3];
+    const clueReady=until(activeOperative,"room-state",room=>room.game?.phase==="guess"&&room.game?.clue?.count===0);
+    activeSpy.emit("give-clue",{word:"თავისუფლება",count:0});
+    const zeroClue=await clueReady;
+    assert.equal(zeroClue.game.guessesLeft,99,"მინიშნება 0 შეუზღუდავ ცდებს უნდა იძლეოდეს");
+
+    const suggested=until(activeOperative,"room-state",room=>room.game?.pendingGuess?.index===0);
+    activeOperative.emit("suggest-card",{index:0});
+    const beforeConfirm=await suggested;
+    assert.equal(beforeConfirm.game.board[0].revealed,false,"ერთი დაჭერა მხოლოდ მონიშვნაა");
+
+    const contacted=until(activeOperative,"room-state",room=>room.game?.board[0]?.revealed);
+    activeOperative.emit("guess-card");
+    const afterConfirm=await contacted;
+    assert.equal(afterConfirm.game.board[0].revealed,true,"დადასტურება ბარათს ხსნის");
+    assert.match(afterConfirm.game.board[0].art,/\.webp$/);
+
     const reconnectToken=identities[1].token;
     clients[1].disconnect();
     returning=connect();

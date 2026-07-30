@@ -72,7 +72,7 @@ function renderLobby(){
     $(`${team}Operatives`).innerHTML=ops.length?ops.map(chip).join(""):'<span class="empty-slot">ჯერ არავინ არის</span>';
     $(`${team}Count`).textContent=sm.length+ops.length
   });
-  document.querySelectorAll("[data-join]").forEach(btn=>{const[team,role]=btn.dataset.join.split(":"),occupied=role==="spymaster"&&players(team,role).length;btn.disabled=!!occupied&&!players(team,role).some(p=>p.id===state.selfId);btn.textContent=players(team,role).some(p=>p.id===state.selfId)?"შენი ადგილი":role==="spymaster"?"ადგილის დაკავება":"გუნდში შესვლა"});
+  document.querySelectorAll("[data-join]").forEach(btn=>{const[team,role]=btn.dataset.join.split(":");btn.disabled=false;btn.textContent=players(team,role).some(p=>p.id===state.selfId)?"შენი ადგილი":role==="spymaster"?"ხელმძღვანელად შესვლა":"გუნდში შესვლა"});
   $("startGame").classList.toggle("hidden",!self?.host);$("startGame").disabled=!r.canStart;$("roomSettingsBtn").classList.toggle("hidden",!self?.host);
   $("lobbyHint").textContent=r.canStart?(self?.host?"ყველაფერი მზადაა — დაიწყე ოპერაცია!":"ველოდებით მასპინძელს..."):"მინიმუმ 4 მოთამაშე და 2 ხელმძღვანელია საჭირო"
 }
@@ -82,9 +82,10 @@ function renderGame(){
   $("turnText").textContent=`${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა`;$("turnDot").style.background=g.turn==="blue"?"#25a9d3":"#e55a4c";
   $("phaseText").textContent=g.phase==="clue"?"ხელმძღვანელი ფიქრობს...":"ოპერატივები არჩევენ";$("blueScore").textContent=g.remaining.blue;$("redScore").textContent=g.remaining.red;
   renderTeam("blue","blueTeamGame");renderTeam("red","redTeamGame");
-  $("board").innerHTML=g.board.map((c,i)=>{const cls=c.revealed?c.type:(isSpy?`key-${c.type}`:""),pos=avatarPos[(i+2)%8];return`<button class="card ${c.revealed?"revealed":""} ${cls}" data-card="${i}" style="--portrait-pos:${pos}" ${c.revealed||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative"?"disabled":""}><span class="card-word">${esc(c.word)}</span></button>`}).join("");
+  $("board").innerHTML=g.board.map((c,i)=>{const cls=c.revealed?c.type:(isSpy?`key-${c.type}`:""),selected=g.pendingGuess?.index===i;return`<button class="card ${c.revealed?"revealed":""} ${selected?"selected":""} ${cls}" data-card="${i}" ${c.revealed||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative"?"disabled":""}>${c.revealed&&c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}<span class="card-word">${esc(c.word)}</span></button>`}).join("");
   $("clueBanner").classList.toggle("hidden",!g.clue);if(g.clue){$("clueWord").textContent=g.clue.word;$("clueNumber").textContent=g.clue.count===99?"∞":g.clue.count}
-  const myTurn=self?.team===g.turn;$("clueForm").classList.toggle("hidden",!(isSpy&&myTurn&&g.phase==="clue"));$("guessControls").classList.toggle("hidden",!(self?.role==="operative"&&myTurn&&g.phase==="guess"));$("waitingControl").classList.toggle("hidden",(isSpy&&myTurn&&g.phase==="clue")||(self?.role==="operative"&&myTurn&&g.phase==="guess"));$("guessesLeft").textContent=g.guessesLeft===99?"∞":g.guessesLeft;
+  const myTurn=self?.team===g.turn;$("clueForm").classList.toggle("hidden",!(isSpy&&myTurn&&g.phase==="clue"));$("guessControls").classList.toggle("hidden",!(self?.role==="operative"&&myTurn&&g.phase==="guess"));$("waitingControl").classList.toggle("hidden",(isSpy&&myTurn&&g.phase==="clue")||(self?.role==="operative"&&myTurn&&g.phase==="guess"));
+  $("confirmGuess").disabled=!g.pendingGuess;$("guessPrompt").innerHTML=g.pendingGuess?`<b>${esc(g.pendingGuess.actor)}</b>-მ მონიშნა „${esc(g.board[g.pendingGuess.index].word)}“ — დაადასტურეთ არჩევანი`:`ჯერ მონიშნეთ ბარათი — დარჩა <b id="guessesLeft">${g.guessesLeft===99?"∞":g.guessesLeft}</b> ცდა`;
   $("gameLog").innerHTML=g.log.slice(-12).reverse().map(x=>`<div class="log-entry"><b>${esc(x.actor||"სისტემა")}</b> ${esc(x.text)}</div>`).join("");
   const revealed=g.board.filter(c=>c.revealed).length;if(revealed>state.lastRevealed)sound("reveal");if(state.lastPhase==="clue"&&g.phase==="guess")sound("clue");state.lastRevealed=revealed;state.lastPhase=g.phase
 }
@@ -120,9 +121,10 @@ $("roomSettingsForm").onsubmit=e=>{e.preventDefault();socket.emit("update-room-s
 document.querySelectorAll("[data-join]").forEach(btn=>btn.onclick=()=>{const[team,role]=btn.dataset.join.split(":");socket.emit("choose-role",{team,role})});
 $("startGame").onclick=()=>socket.emit("start-game");
 $("clueForm").onsubmit=e=>{e.preventDefault();socket.emit("give-clue",{word:$("clueInput").value.trim(),count:Number($("clueCount").value)});$("clueInput").value=""};
-$("board").onclick=e=>{const card=e.target.closest("[data-card]");if(card)socket.emit("guess-card",{index:Number(card.dataset.card)})};
+$("board").onclick=e=>{const card=e.target.closest("[data-card]");if(card)socket.emit("suggest-card",{index:Number(card.dataset.card)})};
+$("confirmGuess").onclick=()=>socket.emit("guess-card");
 $("endTurn").onclick=()=>socket.emit("end-turn");$("backToLobby").onclick=()=>{socket.emit("back-to-lobby");$("resultModal").close()};
-for(let i=1;i<=9;i++)$("clueCount").insertAdjacentHTML("beforeend",`<option value="${i}">${i}</option>`);$("clueCount").insertAdjacentHTML("beforeend",'<option value="99">∞</option>');
+$("clueCount").insertAdjacentHTML("beforeend",'<option value="0">0</option>');for(let i=1;i<=9;i++)$("clueCount").insertAdjacentHTML("beforeend",`<option value="${i}">${i}</option>`);$("clueCount").insertAdjacentHTML("beforeend",'<option value="99">∞</option>');
 
 socket.on("lobby-list",rooms=>{state.rooms=rooms;renderPublicRooms()});
 socket.on("room-joined",({room,token,selfId})=>{localStorage.setItem("ss-token",token);localStorage.setItem("ss-room",room.code);state.selfId=selfId;$("entryModal").close();applyRoom(room);sound("clue")});
