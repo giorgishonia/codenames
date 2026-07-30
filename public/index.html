@@ -14,42 +14,61 @@
   <div class="noise"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <section id="landing" class="landing">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="საიდუმლო სიტყვა — მთავარი">
+  <section id="landing" class="lobby-browser">
+    <header class="browser-header">
+      <a class="brand" href="/" aria-label="საიდუმლო სიტყვა — ლობები">
         <span class="brand-mark">სს</span>
         <span>საიდუმლო სიტყვა</span>
       </a>
-      <button class="icon-btn" id="soundBtn" aria-label="ხმის გამორთვა" title="ხმა">♫</button>
+      <nav>
+        <span id="onlineCount"><i></i> 0 ონლაინ</span>
+        <button class="header-link" id="rulesLobbyBtn">როგორ ვითამაშო</button>
+        <button class="icon-btn" id="settingsBtn" aria-label="პარამეტრები" title="პარამეტრები">⚙</button>
+      </nav>
     </header>
 
-    <main class="hero">
-      <div class="hero-copy">
-        <div class="eyebrow"><span></span> ქართული ონლაინ თამაში</div>
-        <h1>ერთი სიტყვა.<br><em>ათასი კავშირი.</em></h1>
-        <p>შეკრიბე მეგობრები, მიეცი გუნდს ზუსტი მინიშნება და იპოვე ყველა აგენტი — სანამ მეტოქე დაგასწრებს.</p>
-        <div class="hero-actions">
-          <button class="primary big" id="openCreate">შექმენი ოთახი <span>→</span></button>
-          <button class="secondary big" id="openJoin">შეუერთდი თამაშს</button>
+    <main class="browser-main">
+      <section class="browser-title">
+        <div>
+          <div class="eyebrow"><span></span> საერთო ლობი</div>
+          <h1>აირჩიე ოპერაცია</h1>
+          <p>შეუერთდი ღია ოთახს ან შექმენი ახალი თამაში მეგობრებისთვის.</p>
         </div>
-        <div class="trust-row">
-          <span>● რეალურ დროში</span><span>↻ ავტომატური დაბრუნება</span><span>♬ ხმოვანი ეფექტები</span>
-        </div>
-      </div>
-      <div class="hero-art" aria-label="საიდუმლო აგენტების ილუსტრაციები">
-        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-        <div class="portrait p1"></div><div class="portrait p2"></div><div class="portrait p3"></div>
-        <div class="dossier"><b>სრულიად საიდუმლო</b><span>ოპერაცია: სიტყვა</span><i></i></div>
-        <div class="floating-card fc1">მინიშნება <b>ზღვა · 3</b></div>
-        <div class="floating-card fc2"><span class="dot red"></span> წითლები იწყებენ</div>
-      </div>
-    </main>
+        <button class="primary big" id="openCreate">＋ ახალი ოთახი</button>
+      </section>
 
-    <div class="how">
-      <article><b>01</b><div><h3>შექმენი ლობი</h3><p>მიიღე 5-ნიშნა კოდი და გაუზიარე მეგობრებს.</p></div></article>
-      <article><b>02</b><div><h3>აირჩიე გუნდი</h3><p>გახდი ოპერატივი ან საიდუმლო ხელმძღვანელი.</p></div></article>
-      <article><b>03</b><div><h3>იპოვე აგენტები</h3><p>დააკავშირე სიტყვები ერთი ჭკვიანი მინიშნებით.</p></div></article>
-    </div>
+      <section id="rejoinPanel" class="rejoin-panel hidden">
+        <div class="rejoin-art"><span class="agent-avatar" style="background-position:0% 0%"></span><i>↻</i></div>
+        <div><small>დაუმთავრებელი ოპერაცია</small><h2 id="rejoinName">შენი ოთახი გელოდება</h2><p>შეგიძლია ზუსტად იმავე ადგილიდან გააგრძელო.</p></div>
+        <button class="secondary" id="rejoinBtn">ოთახში დაბრუნება →</button>
+        <button class="dismiss-rejoin" id="dismissRejoin" aria-label="დამალვა">×</button>
+      </section>
+
+      <section class="rooms-section">
+        <div class="rooms-toolbar">
+          <div class="room-tabs">
+            <button class="active" data-filter="all">ყველა ოთახი <b id="allRoomsCount">0</b></button>
+            <button data-filter="waiting">ღიაა</button>
+            <button data-filter="playing">თამაშშია</button>
+          </div>
+          <div class="room-tools">
+            <label class="search-box">⌕ <input id="roomSearch" placeholder="მოძებნე სახელით ან კოდით" autocomplete="off"></label>
+            <button class="refresh-btn" id="refreshRooms" aria-label="განახლება" title="განახლება">↻</button>
+          </div>
+        </div>
+        <div id="roomsGrid" class="rooms-grid"></div>
+        <div id="emptyRooms" class="empty-rooms hidden">
+          <div class="empty-seal">სს</div><h2>ღია ოთახები ჯერ არ არის</h2>
+          <p>იყავი პირველი — შექმენი ოთახი და გაუზიარე მეგობრებს.</p>
+          <button class="primary big" id="emptyCreate">შექმენი პირველი ოთახი</button>
+        </div>
+      </section>
+
+      <footer class="browser-footer">
+        <span>ერთი სიტყვა. ათასი კავშირი.</span>
+        <div><i></i> სერვერი მუშაობს <b>·</b> ოთახში მოთამაშეთა ლიმიტი არ არის</div>
+      </footer>
+    </main>
   </section>
 
   <dialog id="entryModal" class="modal">
@@ -58,8 +77,10 @@
       <div class="modal-stamp">საიდუმლო არქივი</div>
       <h2 id="modalTitle">ახალი ოთახი</h2>
       <p id="modalSubtitle">შეარჩიე აგენტის სახელი.</p>
+      <label id="roomNameWrap">ოთახის სახელი<input id="roomNameInput" maxlength="28" placeholder="მაგ. პარასკევის თამაში"></label>
       <label>შენი სახელი<input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="მაგ. ნინო" required></label>
       <label id="codeWrap" hidden>ოთახის კოდი<input id="codeInput" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE"></label>
+      <label id="visibilityWrap" class="switch-row"><span><b>საჯარო ოთახი</b><small>გამოჩნდება საერთო ლობიში</small></span><input id="publicRoomInput" type="checkbox" checked></label>
       <button class="primary submit" id="entrySubmit" value="default">გაგრძელება →</button>
       <p class="form-error" id="formError"></p>
     </form>
@@ -69,7 +90,7 @@
     <header class="game-header">
       <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
       <div class="room-pill">ოთახი <button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
-      <button class="secondary small" id="leaveLobby">გასვლა</button>
+      <div class="header-actions"><button class="secondary small" id="shareRoom">გაზიარება</button><button class="icon-btn" id="roomSettingsBtn" aria-label="ოთახის პარამეტრები">⚙</button><button class="secondary small" id="leaveLobby">ლობიში გასვლა</button></div>
     </header>
     <main class="lobby-main">
       <div class="lobby-intro">
@@ -137,6 +158,26 @@
       <div class="modal-stamp">საქმე № 25</div><h2>თამაშის წესები</h2>
       <ol><li><b>ხელმძღვანელი</b> ამბობს მხოლოდ ერთ სიტყვას და რიცხვს.</li><li><b>ოპერატივები</b> ირჩევენ დაკავშირებულ ბარათებს — მაქსიმუმ რიცხვი + 1.</li><li>ნეიტრალური ან მეტოქის ბარათი სვლას ასრულებს.</li><li><b>შავი აგენტი</b> გუნდს დაუყოვნებლივ აგებინებს.</li></ol>
       <button class="primary submit">გასაგებია</button>
+    </form>
+  </dialog>
+
+  <dialog id="settingsModal" class="modal settings-modal">
+    <form method="dialog">
+      <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
+      <div class="modal-stamp">პარამეტრები</div><h2>შენი გარემო</h2>
+      <label class="switch-row"><span><b>ხმოვანი ეფექტები</b><small>მინიშნების, არჩევისა და გამარჯვების ხმები</small></span><input id="settingsSound" type="checkbox"></label>
+      <label class="switch-row"><span><b>კომპაქტური ბარათები</b><small>პატარა ეკრანზე მეტი ინფორმაცია გამოჩნდება</small></span><input id="compactMode" type="checkbox"></label>
+      <button class="primary submit">შენახვა</button>
+    </form>
+  </dialog>
+
+  <dialog id="roomSettingsModal" class="modal settings-modal">
+    <form method="dialog" id="roomSettingsForm">
+      <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
+      <div class="modal-stamp">ოთახის პარამეტრები</div><h2>ოპერაციის მართვა</h2>
+      <label>ოთახის სახელი<input id="editRoomName" maxlength="28"></label>
+      <label class="switch-row"><span><b>საჯარო ოთახი</b><small>ყველას შეეძლება საერთო ლობიდან შემოსვლა</small></span><input id="editRoomPublic" type="checkbox"></label>
+      <button class="primary submit">ცვლილებების შენახვა</button>
     </form>
   </dialog>
 

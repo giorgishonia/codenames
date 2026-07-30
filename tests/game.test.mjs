@@ -14,20 +14,23 @@ const until=(socket,event,predicate)=>new Promise((resolve,reject)=>{
 });
 const connect=()=>io(URL,{transports:["websocket"],forceNew:true});
 
-test("ოთახის შექმნა, ოთხი როლი, დაწყება და reconnect",async()=>{
-  const clients=[connect(),connect(),connect(),connect()];
+test("საჯარო ლობი, 7 მოთამაშე, დაწყება და reconnect",async()=>{
+  const clients=Array.from({length:7},connect);
   let returning;
   try{
     await Promise.all(clients.map(c=>wait(c,"connect")));
     const joined=wait(clients[0],"room-joined");
-    clients[0].emit("create-room",{name:"ნინო"});
+    const listed=until(clients[6],"lobby-list",rooms=>rooms.some(room=>room.name==="ტესტის ოპერაცია"));
+    clients[0].emit("create-room",{name:"ნინო",roomName:"ტესტის ოპერაცია",isPublic:true});
     const host=await joined,code=host.room.code;
     assert.match(code,/^[A-Z2-9]{5}$/);
+    assert.equal(host.room.name,"ტესტის ოპერაცია");
+    assert.equal((await listed).find(room=>room.code===code).status,"waiting");
 
     const identities=[host];
-    for(let i=1;i<4;i++){
+    for(let i=1;i<clients.length;i++){
       const next=wait(clients[i],"room-joined");
-      clients[i].emit("join-room",{code,name:["გიორგი","თამარი","ლუკა"][i-1]});
+      clients[i].emit("join-room",{code,name:`მოთამაშე ${i}`});
       identities.push(await next);
     }
 
@@ -36,12 +39,16 @@ test("ოთახის შექმნა, ოთხი როლი, და�
     clients[1].emit("choose-role",{team:"blue",role:"operative"});
     clients[2].emit("choose-role",{team:"red",role:"spymaster"});
     clients[3].emit("choose-role",{team:"red",role:"operative"});
+    clients[4].emit("choose-role",{team:"blue",role:"operative"});
+    clients[5].emit("choose-role",{team:"red",role:"operative"});
+    clients[6].emit("choose-role",{team:"blue",role:"operative"});
     await ready;
 
     const gameState=until(clients[1],"room-state",room=>!!room.game);
     clients[0].emit("start-game");
     const started=await gameState;
     assert.equal(started.game.board.length,25);
+    assert.equal(started.players.length,7);
     assert.equal(started.game.board.every(card=>card.type===null),true,"ოპერატივმა საიდუმლო რუკა არ უნდა მიიღოს");
     assert.equal(started.game.remaining.blue+started.game.remaining.red,17);
 
