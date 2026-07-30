@@ -34,6 +34,10 @@ test("საჯარო ლობი, 7 მოთამაშე, დაწყ�
       identities.push(await next);
     }
 
+    const autoAssigned=until(clients[4],"room-state",room=>room.players.find(player=>player.id===identities[4].selfId)?.role==="operative");
+    clients[4].emit("quick-role",{mode:"auto"});
+    assert.ok((await autoAssigned).players.find(player=>player.id===identities[4].selfId)?.team);
+
     const ready=until(clients[0],"room-state",room=>room.canStart);
     clients[0].emit("choose-role",{team:"blue",role:"spymaster"});
     clients[1].emit("choose-role",{team:"blue",role:"operative"});
@@ -51,6 +55,10 @@ test("საჯარო ლობი, 7 მოთამაშე, დაწყ�
     assert.equal(started.players.length,7);
     assert.equal(started.game.board.every(card=>card.type===null),true,"ოპერატივმა საიდუმლო რუკა არ უნდა მიიღოს");
     assert.equal(started.game.remaining.blue+started.game.remaining.red,17);
+
+    const chatted=until(clients[0],"room-state",room=>room.chat?.some(message=>message.text==="მზად ვართ"));
+    clients[1].emit("send-chat",{text:"მზად ვართ"});
+    assert.equal((await chatted).chat.at(-1).actor,"მოთამაშე 1");
 
     const activeSpy=started.game.turn==="blue"?clients[0]:clients[2];
     const activeOperative=started.game.turn==="blue"?clients[1]:clients[3];

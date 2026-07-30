@@ -89,7 +89,7 @@
   <section id="lobby" class="lobby hidden">
     <header class="game-header">
       <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
-      <div class="room-pill">ოთახი <button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
+      <div class="room-pill"><span id="lobbyRoomName">ოთახი</span><button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
       <div class="header-actions"><button class="secondary small" id="shareRoom">გაზიარება</button><button class="icon-btn" id="roomSettingsBtn" aria-label="ოთახის პარამეტრები">⚙</button><button class="secondary small" id="leaveLobby">ლობიში გასვლა</button></div>
     </header>
     <main class="lobby-main">
@@ -97,6 +97,8 @@
         <div class="eyebrow"><span></span> ოპერაციის ბრიფინგი</div>
         <h2>აირჩიე შენი მხარე</h2>
         <p>თითოეულ გუნდს სჭირდება ერთი ხელმძღვანელი. მას მთელი საიდუმლო რუკა ეცოდინება.</p>
+        <div class="quick-roles"><button id="quickTeam" class="secondary">⚡ სწრაფი განაწილება</button><button id="observeGame" class="secondary">◉ დამკვირვებლად დარჩენა</button></div>
+        <div id="waitingRoster" class="waiting-roster"></div>
       </div>
       <div class="teams-select">
         <section class="team-select blue">
@@ -127,10 +129,12 @@
     <main class="game-layout">
       <aside class="side-panel blue-panel">
         <div class="score-head"><span>ლურჯი</span><b id="blueScore">9</b></div>
+        <div class="team-progress"><i id="blueProgress"></i></div>
         <div id="blueTeamGame" class="game-players"></div>
       </aside>
 
       <section class="board-zone">
+        <div id="roleBanner" class="role-banner"><b>დამკვირვებელი</b><span>თვალი ადევნე ოპერაციას</span></div>
         <div id="clueBanner" class="clue-banner hidden"><span>მინიშნება</span><b id="clueWord">—</b><i id="clueNumber">0</i></div>
         <div id="board" class="board" aria-label="სიტყვების დაფა"></div>
         <div class="control-dock">
@@ -149,8 +153,15 @@
 
       <aside class="side-panel red-panel">
         <div class="score-head"><span>წითელი</span><b id="redScore">8</b></div>
+        <div class="team-progress"><i id="redProgress"></i></div>
         <div id="redTeamGame" class="game-players"></div>
         <div class="log-wrap"><h3>ოპერაციის ჟურნალი</h3><div id="gameLog" class="game-log"></div></div>
+        <div class="chat-wrap">
+          <h3>გუნდის საუბარი</h3>
+          <div id="roomChat" class="room-chat"></div>
+          <form id="chatForm"><input id="chatInput" maxlength="160" placeholder="დაწერე შეტყობინება…" autocomplete="off"><button aria-label="გაგზავნა">↑</button></form>
+          <small id="chatHint"></small>
+        </div>
       </aside>
     </main>
   </section>
