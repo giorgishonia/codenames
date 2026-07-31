@@ -269,13 +269,13 @@ function handle(clientId: string, event: string, data: any) {
 export async function handleGameRequest(request: Request, db: D1Database): Promise<Response | null> {
   const url = new URL(request.url);
   const primary = db.withSession("first-primary");
-  if (url.pathname === "/api/connect" && request.method === "POST") {
+  if (url.pathname === "/api/v2/connect" && request.method === "POST") {
     await ensureSchema(primary);
     const clientId = id();
     await primary.prepare("INSERT INTO game_clients (id, last_seen) VALUES (?, ?)").bind(clientId, Date.now()).run();
     return Response.json({clientId});
   }
-  if (url.pathname === "/api/event" && request.method === "POST") {
+  if (url.pathname === "/api/v2/event" && request.method === "POST") {
     await loadWorld(primary);
     const message = await request.json() as any;
     const client = clients.get(message?.clientId);
@@ -290,7 +290,7 @@ export async function handleGameRequest(request: Request, db: D1Database): Promi
     await saveEvent(primary, message.clientId, previousCodes);
     return Response.json(client.queue.splice(0,100));
   }
-  if (url.pathname === "/api/poll" && request.method === "GET") {
+  if (url.pathname === "/api/v2/poll" && request.method === "GET") {
     await loadWorld(primary);
     const clientId = url.searchParams.get("client") || "";
     const client = clients.get(clientId);

@@ -4,7 +4,7 @@ function realtimeSocket(){
   const poll=async()=>{
     if(!active||!clientId||polling)return;polling=true;
     try{
-      const response=await fetch(`/api/poll?client=${encodeURIComponent(clientId)}`,{cache:"no-store"});
+      const response=await fetch(`/api/v2/poll?client=${encodeURIComponent(clientId)}`,{cache:"no-store"});
       if(!response.ok)throw new Error("poll");
       const messages=await response.json();messages.forEach(message=>dispatch(message.event,message.data))
     }catch{
@@ -19,7 +19,7 @@ function realtimeSocket(){
     once(event,fn){const wrapped=data=>{api.off(event,wrapped);fn(data)};return api.on(event,wrapped)},
     off(event,fn){handlers.set(event,(handlers.get(event)||[]).filter(item=>item!==fn));return api},
     emit(event,data){
-      if(clientId)fetch("/api/event",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clientId,event,data})})
+      if(clientId)fetch("/api/v2/event",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clientId,event,data})})
         .then(async response=>{if(!response.ok)throw new Error("event");const messages=await response.json();messages.forEach(message=>dispatch(message.event,message.data))})
         .catch(()=>{});
       return api
@@ -28,7 +28,7 @@ function realtimeSocket(){
       if(api.connected)return api;
       active=true;clearTimeout(retry);
       try{
-        const response=await fetch("/api/connect",{method:"POST"});
+        const response=await fetch("/api/v2/connect",{method:"POST"});
         if(!response.ok)throw new Error("connect");
         clientId=(await response.json()).clientId;api.connected=true;dispatch("connect");poll()
       }catch{retry=setTimeout(()=>api.connect(),900)}
