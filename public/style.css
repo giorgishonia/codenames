@@ -492,7 +492,8 @@ button{cursor:pointer}
   .card{min-height:0;padding:0;border:1px solid var(--line-2);border-radius:7px;background:#d8c39d;color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.32)}
   .card:not(.revealed):hover{transform:none;filter:none;box-shadow:0 3px 0 rgba(0,0,0,.32)}
   .card:not(.revealed):active{transform:translateY(2px)}
-  .card-art,.card-placeholder-art{display:block;height:calc(100% - 21px);object-fit:contain}
+  .card-art,.card-placeholder-art{display:none}
+  .card.revealed .card-art{display:block;height:calc(100% - 21px);object-fit:contain}
   .card-marks{display:flex;left:2px;right:24px;top:2px;justify-content:flex-start;gap:1px;max-height:22px}
   .card-mark{padding:1px;gap:0}
   .card-mark b{display:none}
