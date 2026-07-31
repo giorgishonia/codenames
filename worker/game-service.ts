@@ -373,16 +373,19 @@ function handle(clientId: string, event: string, data: any) {
   } else if (event === "suggest-card") {
     const game = room.game, index = Number(data?.index), card = game?.board[index];
     if (!game || game.winner || player.role !== "operative" || player.team !== game.turn || game.phase !== "guess" || !card || card.revealed) return;
-    const picks = (game.picks ||= []) as any[], previous = picks.find(pick => pick.playerId === player.id);
-    const others = picks.filter(pick => pick.playerId !== player.id);
-    game.picks = previous?.index === index ? others : [...others, {playerId:player.id, name:player.name, avatar:player.avatar, team:player.team, index}];
+    const picks = (game.picks ||= []) as any[], existing = picks.findIndex(pick => pick.playerId === player.id && pick.index === index);
+    if (existing >= 0) picks.splice(existing, 1);
+    else picks.push({playerId:player.id, name:player.name, avatar:player.avatar, team:player.team, index});
     const last = game.picks[game.picks.length - 1];
     game.pendingGuess = last ? {index:last.index, actor:last.name} : null;
     emitRoom(room);
-  } else if (event === "guess-card") {
-    const game = room.game, index = game?.pendingGuess?.index, card = game?.board[index];
-    if (!game || game.winner || player.role !== "operative" || player.team !== game.turn || game.phase !== "guess" || !card || card.revealed) return;
-    game.pendingGuess = null; game.picks = []; card.revealed = true;
+  } else if (event === "confirm-card" || event === "guess-card") {
+    const game = room.game, index = Number(data?.index ?? game?.pendingGuess?.index), card = game?.board[index];
+    if (!game || game.winner || player.role !== "operative" || player.team !== game.turn || game.phase !== "guess" || !card || card.revealed || !game.picks?.some((pick:any) => pick.index === index)) return;
+    game.picks = game.picks.filter((pick:any) => pick.index !== index);
+    const last = game.picks[game.picks.length - 1];
+    game.pendingGuess = last ? {index:last.index, actor:last.name} : null;
+    card.revealed = true;
     game.log.push({actor:player.name, text:`დაადასტურა „${card.word}“.`});
     if (card.type === "assassin") return finish(room, player.team === "blue" ? "red" : "blue", "შავი აგენტი გაიხსნა — ოპერაცია ჩავარდა.");
     if (card.type === "blue" || card.type === "red") {

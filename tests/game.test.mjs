@@ -91,7 +91,7 @@ test("საჯარო ლობი, 7 მოთამაშე, დაწყ�
     assert.equal(beforeConfirm.game.board[0].revealed,false,"ერთი დაჭერა მხოლოდ მონიშვნაა");
 
     const contacted=until(activeOperative,"room-state",room=>room.game?.board[0]?.revealed);
-    activeOperative.emit("guess-card");
+    activeOperative.emit("confirm-card",{index:0});
     const afterConfirm=await contacted;
     assert.equal(afterConfirm.game.board[0].revealed,true,"დადასტურება ბარათს ხსნის");
     assert.match(afterConfirm.game.board[0].art,/\.webp$/);
@@ -201,21 +201,22 @@ test("clue count grants one extra guess and a wrong guess ends the turn",async()
     assert.equal(guessState.game.guessesLeft,2);
 
     const correctIndex=key.game.board.findIndex(card=>card.type===turn);
-    const selectedCorrect=until(operative,"room-state",room=>room.game?.pendingGuess?.index===correctIndex);
+    const wrongIndex=key.game.board.findIndex((card,index)=>index!==correctIndex&&card.type!==turn&&card.type!=="assassin");
+    const selectedCorrect=until(operative,"room-state",room=>room.game?.picks?.some(pick=>pick.index===correctIndex));
     operative.emit("suggest-card",{index:correctIndex});
     await selectedCorrect;
+    const selectedBoth=until(operative,"room-state",room=>room.game?.picks?.some(pick=>pick.index===correctIndex)&&room.game?.picks?.some(pick=>pick.index===wrongIndex));
+    operative.emit("suggest-card",{index:wrongIndex});
+    await selectedBoth;
     const correctResult=until(operative,"room-state",room=>room.game?.board[correctIndex]?.revealed&&room.game?.guessesLeft===1);
-    operative.emit("guess-card");
+    operative.emit("confirm-card",{index:correctIndex});
     const afterCorrect=await correctResult;
     assert.equal(afterCorrect.game.phase,"guess");
     assert.equal(afterCorrect.game.turn,turn);
+    assert.equal(afterCorrect.game.picks.some(pick=>pick.index===wrongIndex),true,"დარჩენილი მონიშვნა სწორი პასუხის შემდეგ უნდა შენარჩუნდეს");
 
-    const wrongIndex=key.game.board.findIndex((card,index)=>index!==correctIndex&&card.type!==turn&&card.type!=="assassin");
-    const selectedWrong=until(operative,"room-state",room=>room.game?.pendingGuess?.index===wrongIndex);
-    operative.emit("suggest-card",{index:wrongIndex});
-    await selectedWrong;
     const turnEnded=until(operative,"room-state",room=>room.game?.turn!==turn&&room.game?.phase==="clue");
-    operative.emit("guess-card");
+    operative.emit("confirm-card",{index:wrongIndex});
     const afterWrong=await turnEnded;
     assert.equal(afterWrong.game.pendingGuess,null);
   }finally{

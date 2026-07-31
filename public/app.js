@@ -157,7 +157,8 @@ function renderBoard(g,self,over){
     const tracked=button.dataset.revealed!==undefined,wasRevealed=button.dataset.revealed==="true",justRevealed=tracked&&!wasRevealed&&c.revealed&&!isSpy;
     const className=`card ${open?"revealed":""} ${justRevealed?"reveal-anim":""} ${isSpy&&c.revealed?"spymaster-revealed":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
     if(button.className!==className)button.className=className;
-    button.disabled=c.revealed||over||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative";
+    const canChoose=!c.revealed&&!over&&g.phase==="guess"&&self?.team===g.turn&&self?.role==="operative";
+    button.disabled=!canChoose;
     button.dataset.revealed=String(!!c.revealed);
     let art=button.querySelector(".card-art");
     if(c.art&&art?.dataset.art!==c.art){
@@ -165,10 +166,12 @@ function renderBoard(g,self,over){
       else art.src=`/cards/${c.art}`;
       art.dataset.art=c.art
     }
-    const picksKey=JSON.stringify(picks.map(v=>[v.playerId,v.name,v.avatar,v.team]));
+    const picksKey=JSON.stringify([canChoose,picks.map(v=>[v.playerId,v.name,v.avatar,v.team])]);
     if(button.dataset.picks!==picksKey){
       button.querySelector(".card-marks")?.remove();
+      button.querySelector(".card-confirm")?.remove();
       const marks=cardMarks(picks);if(marks)button.insertAdjacentHTML("afterbegin",marks);
+      if(picks.length&&canChoose)button.insertAdjacentHTML("beforeend",'<span class="card-confirm" aria-hidden="true">✓</span>');
       button.dataset.picks=picksKey
     }
   })
@@ -193,7 +196,7 @@ function renderGame(){
   $("clueForm").classList.toggle("hidden",!clueTurn);$("guessControls").classList.toggle("hidden",!guessTurn);$("waitingControl").classList.toggle("hidden",over||clueTurn||guessTurn);
   $("gameOverControls").classList.toggle("hidden",!over);
   if(over){$("gameOverText").textContent=`${g.winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს — ყველა ბარათი გახსნილია`;$("rematchBtn").classList.toggle("hidden",!self?.host)}
-  $("confirmGuess").disabled=!g.pendingGuess;$("guessPrompt").innerHTML=g.pendingGuess?`<b>${esc(g.pendingGuess.actor)}</b>-მ მონიშნა „${esc(g.board[g.pendingGuess.index].word)}“ — დაადასტურეთ არჩევანი`:`ჯერ მონიშნეთ ბარათი — დარჩა <b id="guessesLeft">${g.guessesLeft===99?"∞":g.guessesLeft}</b> ცდა`;
+  $("guessPrompt").innerHTML=`მონიშნეთ ერთი ან რამდენიმე ბარათი და დააჭირეთ მწვანე ✓-ს — დარჩა <b id="guessesLeft">${g.guessesLeft===99?"∞":g.guessesLeft}</b> ცდა`;
   $("gameLog").innerHTML=g.log.slice(-12).reverse().map(x=>`<div class="log-entry"><b>${esc(x.actor||"სისტემა")}</b> ${esc(x.text)}</div>`).join("");
   renderChat(self);
   const revealed=g.board.filter(c=>c.revealed).length;if(revealed>state.lastRevealed)sound("reveal");if(state.lastPhase==="clue"&&g.phase==="guess")sound("clue");state.lastRevealed=revealed;state.lastPhase=g.phase
@@ -246,8 +249,11 @@ document.querySelectorAll("[data-join]").forEach(btn=>btn.onclick=()=>{const[tea
 $("quickTeam").onclick=()=>socket.emit("quick-role",{mode:"auto"});$("observeGame").onclick=()=>socket.emit("quick-role",{mode:"observer"});
 $("startGame").onclick=()=>socket.emit("start-game");
 $("clueForm").onsubmit=e=>{e.preventDefault();socket.emit("give-clue",{word:$("clueInput").value.trim(),count:Number($("clueCount").value)});$("clueInput").value=""};
-$("board").onclick=e=>{const card=e.target.closest("[data-card]");if(card)socket.emit("suggest-card",{index:Number(card.dataset.card)})};
-$("confirmGuess").onclick=()=>socket.emit("guess-card");
+$("board").onclick=e=>{
+  const card=e.target.closest("[data-card]");if(!card)return;
+  const index=Number(card.dataset.card);
+  socket.emit(e.target.closest(".card-confirm")?"confirm-card":"suggest-card",{index})
+};
 $("endTurn").onclick=()=>socket.emit("end-turn");
 $("backToLobby").onclick=$("rematchBtn").onclick=()=>{clearTimeout(state.resultTimer);socket.emit("back-to-lobby");$("resultModal").close()};
 $("resultModal").onclick=e=>{if(e.target===$("resultModal")){clearTimeout(state.resultTimer);$("resultModal").close()}};
