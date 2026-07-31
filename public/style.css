@@ -442,10 +442,13 @@ button{cursor:pointer}
 }
 @media(max-width:640px){
   .browser-header{height:74px;padding:0 14px}
-  .browser-header .brand>span:last-child,.browser-header .header-link,.browser-header nav>span{display:none}
+  .browser-header .brand{flex:1;min-width:0;gap:9px}
+  .browser-header .brand>span:last-child{display:block;min-width:0;white-space:nowrap;font-size:clamp(13px,4.5vw,18px);line-height:1}
+  .browser-header .header-link,.browser-header nav>span{display:none}
   .browser-header nav{gap:8px}
   .brand-mark{width:48px;height:48px;border-radius:15px}
   .browser-main{padding:28px 14px 20px}
+  .title-emblem{display:none}
   .browser-title{flex-direction:column;align-items:stretch;text-align:left}
   .browser-title .primary.big{width:100%}
   .rooms-toolbar{flex-direction:column;align-items:stretch;gap:8px}
