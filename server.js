@@ -86,6 +86,8 @@ async function attachIdentity(room,player,authToken){
   const profile=await verifyAccessToken(String(authToken)).catch(()=>null);
   if(!profile)return null;
   player.discordId=profile.discordId;player.avatarUrl=profile.avatarUrl||null;player.userId=profile.userId;
+  // Discord-ით შესული მოთამაშის სახელი ანგარიშიდან მოდის — ძველი სტუმრის სახელი აღარ რჩება.
+  const discordName=clean(profile.name,18);if(discordName.length>=2)player.name=discordName;
   if(room.pendingHostDiscordId===profile.discordId){room.players.forEach(x=>x.host=false);player.host=true;room.hostId=player.id;room.pendingHostDiscordId=null}
   return profile
 }

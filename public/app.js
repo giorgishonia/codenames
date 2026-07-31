@@ -96,7 +96,8 @@ async function loadProfile(){
       name:(meta.custom_claims?.global_name||meta.full_name||meta.name||meta.user_name||"").trim().slice(0,18),
       avatarUrl:meta.avatar_url||meta.picture||null
     };
-    if(state.profile.name&&!localStorage.getItem("ss-name"))localStorage.setItem("ss-name",state.profile.name);
+    // Discord ანგარიშის სახელი უპირატესია — სტუმრობისას შენახული სახელი გადაიწერება.
+    if(state.profile.name)localStorage.setItem("ss-name",state.profile.name);
     return state.profile
   }catch{return null}
 }
@@ -127,7 +128,7 @@ function syncSettings(){
   document.body.classList.toggle("body-compact",state.compact)
 }
 function openEntry(mode,prefill=""){
-  const savedName=localStorage.getItem("ss-name")?.trim();
+  const savedName=(state.profile?.name||localStorage.getItem("ss-name")||"").trim();
   if(mode==="join"&&savedName?.length>=2&&prefill.length===5){
     const reconnectToken=localStorage.getItem("ss-token"),savedRoom=localStorage.getItem("ss-room");
     connectAnd(reconnectToken&&savedRoom===prefill?"reconnect-room":"join-room",{name:savedName,code:prefill,reconnectToken,token:reconnectToken,discordToken:state.discordToken||undefined,authToken:authToken()});
@@ -138,14 +139,14 @@ function openEntry(mode,prefill=""){
   $("modalSubtitle").textContent=mode==="create"?"დაარქვი ოპერაციას სახელი.":"შეიყვანე შენი სახელი — შემდეგ ჯერზე დაგიმახსოვრებთ.";
   $("roomNameWrap").hidden=mode!=="create";$("nameWrap").hidden=mode==="create";$("visibilityWrap").hidden=true;
   $("roomNameInput").required=mode==="create";$("nameInput").required=mode==="join";
-  $("nameInput").value=localStorage.getItem("ss-name")||"";$("formError").textContent="";
+  $("nameInput").value=state.profile?.name||localStorage.getItem("ss-name")||"";$("formError").textContent="";
   $("entryModal").showModal();setTimeout(()=>$(mode==="create"?"roomNameInput":"nameInput").focus(),50)
 }
 function connectAnd(event,payload){if(!socket.connected){socket.connect();socket.once("connect",()=>socket.emit(event,payload))}else socket.emit(event,payload)}
 function enter(e){
   e.preventDefault();
   const roomName=$("roomNameInput").value.trim(),code=state.joinCode;
-  let name=state.mode==="join"?$("nameInput").value.trim():localStorage.getItem("ss-name");
+  let name=state.mode==="join"?$("nameInput").value.trim():(state.profile?.name||localStorage.getItem("ss-name"));
   if(state.mode==="join"&&name.length<2)return $("formError").textContent="სახელი მინიმუმ 2 სიმბოლო უნდა იყოს.";
   if(state.mode==="create"&&roomName.length<2)return $("formError").textContent="ოთახს მოკლე სახელი მაინც სჭირდება.";
   if(!name){name=`მოთამაშე-${Math.floor(1000+Math.random()*9000)}`}
@@ -409,5 +410,6 @@ readAuthHash();
 loadConfig().then(loadProfile).then(()=>{
   renderAuth();
   const self=state.room?.players?.find(p=>p.id===state.selfId);
-  if(state.profile&&state.room&&!self?.discord){state.identitySent=true;socket.emit("refresh-identity",{authToken:authToken()})}
+  // ჯერ არ არის მიბმული, ან ოთახში ძველი (სტუმრის) სახელი ჩანს — ვთხოვთ სერვერს განახლებას.
+  if(state.profile&&state.room&&(!self?.discord||(state.profile.name&&self.name!==state.profile.name))){state.identitySent=true;socket.emit("refresh-identity",{authToken:authToken()})}
 });

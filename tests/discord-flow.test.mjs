@@ -197,10 +197,11 @@ test("Discord ლოგინი: მოთამაშეს ებმება
   assert.equal(withBogus?.discord,false,"ყალბი token-ით ანგარიში არ ებმება");
   assert.ok(!withBogus?.avatarUrl,"ყალბი token-ით ფოტო არ ჩნდება");
 
-  // სწორი token — ებმება
+  // სწორი token — ებმება და სტუმრის სახელს Discord-ის სახელი ცვლის
   guest.emit("refresh-identity",{authToken:"good-token"});
-  await wait(host,"room-state",room=>room.players.some(player=>player.name==="სტუმარი"&&player.discord));
-  const linked=rooms.get(host).players.find(player=>player.name==="სტუმარი");
+  await wait(host,"room-state",room=>room.players.some(player=>player.discord));
+  const linked=rooms.get(host).players.find(player=>player.discord);
+  assert.equal(linked.name,"ლოგინი","Discord-ით შესვლისას სტუმრის სახელი ანგარიშისით იცვლება");
   assert.equal(linked.discord,true);
   assert.equal(linked.avatarUrl,"https://cdn.discordapp.com/avatars/555000111/hash.png?size=128");
   assert.equal(linked.discordId,undefined,"discordId კლიენტებს არ ეგზავნება");
