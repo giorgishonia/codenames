@@ -10,10 +10,16 @@ type Room = {
 
 const rooms = new Map<string, Room>();
 const clients = new Map<string, Client>();
-const STATE_SCHEMA = `CREATE TABLE IF NOT EXISTS realtime_state (
-  id INTEGER PRIMARY KEY,
-  data TEXT NOT NULL,
+const ROOM_SCHEMA = `CREATE TABLE IF NOT EXISTS game_rooms (
+  code TEXT PRIMARY KEY,
+  state TEXT NOT NULL,
   updated_at INTEGER NOT NULL
+)`;
+const CLIENT_SCHEMA = `CREATE TABLE IF NOT EXISTS game_clients (
+  id TEXT PRIMARY KEY,
+  room_code TEXT,
+  player_id TEXT,
+  last_seen INTEGER NOT NULL
 )`;
 const WORDS = [
   "მთა","ზღვა","მზე","მთვარე","ვარსკვლავი","წვიმა","ქარი","თოვლი","ღრუბელი","ტყე",
@@ -123,23 +129,40 @@ const finish = (room: Room, winner: string, reason: string) => {
   clients.forEach((client, clientId) => { if (client.room === room.code) send(clientId, "game-over", {winner, reason}); });
 };
 
-async function loadState(db: any) {
-  await db.prepare(STATE_SCHEMA).run();
-  const row = await db.prepare("SELECT data FROM realtime_state WHERE id = 1").first<{data:string}>();
-  rooms.clear(); clients.clear();
-  if (!row?.data) return;
-  try {
-    const saved = JSON.parse(row.data);
-    for (const [code, room] of saved.rooms || []) rooms.set(code, room);
-    for (const [clientId, client] of saved.clients || []) clients.set(clientId, client);
-  } catch {}
+async function ensureSchema(db: any) {
+  await db.batch([db.prepare(ROOM_SCHEMA), db.prepare(CLIENT_SCHEMA)]);
 }
 
-async function saveState(db: any) {
-  const data = JSON.stringify({rooms:[...rooms], clients:[...clients]});
-  await db.prepare(
-    "INSERT INTO realtime_state (id, data, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
-  ).bind(data, Date.now()).run();
+async function loadWorld(db: any) {
+  await ensureSchema(db);
+  const [roomResult, clientResult] = await Promise.all([
+    db.prepare("SELECT code, state FROM game_rooms").all(),
+    db.prepare("SELECT id, room_code, player_id, last_seen FROM game_clients").all()
+  ]);
+  rooms.clear(); clients.clear();
+  for (const row of roomResult.results || []) {
+    try { rooms.set(row.code, JSON.parse(row.state)); } catch {}
+  }
+  for (const row of clientResult.results || []) {
+    clients.set(row.id, {room:row.room_code || undefined, player:row.player_id || undefined, lastSeen:Number(row.last_seen), queue:[]});
+  }
+  const active = new Set(
+    [...clients.values()].filter(client => Date.now() - client.lastSeen < 150_000 && client.room && client.player)
+      .map(client => `${client.room}:${client.player}`)
+  );
+  rooms.forEach(room => room.players.forEach(player => { player.connected = active.has(`${room.code}:${player.id}`); }));
+}
+
+async function saveEvent(db: any, clientId: string, previousCodes: Set<string>) {
+  const statements = [...rooms.values()].map(room => db.prepare(
+    "INSERT INTO game_rooms (code, state, updated_at) VALUES (?, ?, ?) ON CONFLICT(code) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at"
+  ).bind(room.code, JSON.stringify(room), Date.now()));
+  for (const code of previousCodes) if (!rooms.has(code)) statements.push(db.prepare("DELETE FROM game_rooms WHERE code = ?").bind(code));
+  const client = clients.get(clientId);
+  if (client) statements.push(db.prepare(
+    "INSERT INTO game_clients (id, room_code, player_id, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET room_code = excluded.room_code, player_id = excluded.player_id, last_seen = excluded.last_seen"
+  ).bind(clientId, client.room || null, client.player || null, client.lastSeen));
+  if (statements.length) await db.batch(statements);
 }
 
 function handle(clientId: string, event: string, data: any) {
@@ -247,33 +270,46 @@ export async function handleGameRequest(request: Request, db: D1Database): Promi
   const url = new URL(request.url);
   const primary = db.withSession("first-primary");
   if (url.pathname === "/api/connect" && request.method === "POST") {
-    await loadState(primary);
-    const now = Date.now();
-    clients.forEach((client, clientId) => { if (now - client.lastSeen > 120_000) clients.delete(clientId); });
+    await ensureSchema(primary);
     const clientId = id();
-    clients.set(clientId, {queue:[], lastSeen:now});
-    await saveState(primary);
+    await primary.prepare("INSERT INTO game_clients (id, last_seen) VALUES (?, ?)").bind(clientId, Date.now()).run();
     return Response.json({clientId});
   }
   if (url.pathname === "/api/event" && request.method === "POST") {
-    await loadState(primary);
+    await loadWorld(primary);
     const message = await request.json() as any;
     const client = clients.get(message?.clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
     client.lastSeen = Date.now();
+    if (client.room && client.player) {
+      const player = rooms.get(client.room)?.players.find(item => item.id === client.player);
+      if (player) player.connected = true;
+    }
+    const previousCodes = new Set(rooms.keys());
     handle(message.clientId, message.event, message.data);
-    await saveState(primary);
-    return Response.json({ok:true});
+    await saveEvent(primary, message.clientId, previousCodes);
+    return Response.json(client.queue.splice(0,100));
   }
   if (url.pathname === "/api/poll" && request.method === "GET") {
-    await loadState(primary);
+    await loadWorld(primary);
     const clientId = url.searchParams.get("client") || "";
     const client = clients.get(clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
     client.lastSeen = Date.now();
-    const queue = client.queue.splice(0, 100);
-    await saveState(primary);
-    return Response.json(queue, {headers:{"cache-control":"no-store"}});
+    if (client.room && client.player) {
+      const player = rooms.get(client.room)?.players.find(item => item.id === client.player);
+      if (player) player.connected = true;
+    }
+    await primary.prepare("UPDATE game_clients SET last_seen = ? WHERE id = ?").bind(client.lastSeen, clientId).run();
+    const messages: {event:string;data?:unknown}[] = [{event:"lobby-list", data:lobbyList()}];
+    if (client.room && client.player) {
+      const room = rooms.get(client.room);
+      if (room) {
+        messages.push({event:"room-state", data:publicRoom(room, client.player)});
+        if (room.game?.winner) messages.push({event:"game-over", data:{winner:room.game.winner, reason:"ოპერაცია დასრულებულია."}});
+      }
+    }
+    return Response.json(messages, {headers:{"cache-control":"no-store"}});
   }
   return null;
 }

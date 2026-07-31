@@ -19,7 +19,9 @@ function realtimeSocket(){
     once(event,fn){const wrapped=data=>{api.off(event,wrapped);fn(data)};return api.on(event,wrapped)},
     off(event,fn){handlers.set(event,(handlers.get(event)||[]).filter(item=>item!==fn));return api},
     emit(event,data){
-      if(clientId)fetch("/api/event",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clientId,event,data})}).catch(()=>{});
+      if(clientId)fetch("/api/event",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clientId,event,data})})
+        .then(async response=>{if(!response.ok)throw new Error("event");const messages=await response.json();messages.forEach(message=>dispatch(message.event,message.data))})
+        .catch(()=>{});
       return api
     },
     async connect(){
@@ -182,7 +184,7 @@ $("clueCount").insertAdjacentHTML("beforeend",'<option value="0">0</option>');fo
 socket.on("lobby-list",rooms=>{state.rooms=rooms;renderPublicRooms()});
 socket.on("room-joined",({room,token,selfId})=>{localStorage.setItem("ss-token",token);localStorage.setItem("ss-room",room.code);state.selfId=selfId;$("entryModal").close();applyRoom(room);sound("clue")});
 socket.on("room-state",applyRoom);
-socket.on("game-over",({winner,reason})=>{const self=state.room?.players.find(p=>p.id===state.selfId);sound(winner===self?.team?"win":"lose");$("resultSeal").classList.toggle("red",winner==="red");$("resultTitle").textContent=`${winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს!`;$("resultText").textContent=reason;$("backToLobby").disabled=!self?.host;$("backToLobby").textContent=self?.host?"რემატჩი — ლობიში დაბრუნება":"ველოდებით მასპინძელს…";$("resultModal").showModal()});
+socket.on("game-over",({winner,reason})=>{const self=state.room?.players.find(p=>p.id===state.selfId);if(!$("resultModal").open)sound(winner===self?.team?"win":"lose");$("resultSeal").classList.toggle("red",winner==="red");$("resultTitle").textContent=`${winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს!`;$("resultText").textContent=reason;$("backToLobby").disabled=!self?.host;$("backToLobby").textContent=self?.host?"რემატჩი — ლობიში დაბრუნება":"ველოდებით მასპინძელს…";if(!$("resultModal").open)$("resultModal").showModal()});
 socket.on("error-message",msg=>{$("formError").textContent=msg;toast(msg)});
 socket.on("disconnect",()=>{if(state.room)toast("კავშირი გაწყდა — ვცდილობთ დაბრუნებას...")});
 socket.on("connect",()=>{
