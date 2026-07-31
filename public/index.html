@@ -6,8 +6,11 @@
   <meta name="theme-color" content="#111820">
   <meta name="description" content="საიდუმლო სიტყვა — ქართული ონლაინ გუნდური სიტყვების თამაში">
   <title>საიდუმლო სიტყვა</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js?v=11" defer></script>
+  <link rel="icon" type="image/png" href="/saidumlo-logo.png?v=1">
+  <link rel="apple-touch-icon" href="/saidumlo-logo.png?v=1">
+  <link rel="stylesheet" href="/style.css?v=4">
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="/app.js?v=17" defer></script>
 </head>
 <body>
   <div class="noise"></div>
@@ -16,7 +19,7 @@
   <section id="landing" class="lobby-browser">
     <header class="browser-header">
       <a class="brand" href="/" aria-label="საიდუმლო სიტყვა — ლობები">
-        <span class="brand-mark">სს</span>
+        <span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span>
         <span>საიდუმლო სიტყვა</span>
       </a>
       <nav>
@@ -37,7 +40,7 @@
       </section>
 
       <section id="rejoinPanel" class="rejoin-panel hidden">
-        <div class="rejoin-art"><span class="agent-avatar" style="background-position:0% 0%"></span><i>↻</i></div>
+        <div class="rejoin-art"><span class="agent-avatar"></span><i>↻</i></div>
         <div><small>დაუმთავრებელი ოპერაცია</small><h2 id="rejoinName">შენი ოთახი გელოდება</h2><p>შეგიძლია ზუსტად იმავე ადგილიდან გააგრძელო.</p></div>
         <button class="secondary" id="rejoinBtn">ოთახში დაბრუნება →</button>
         <button class="dismiss-rejoin" id="dismissRejoin" aria-label="დამალვა">×</button>
@@ -78,7 +81,6 @@
       <p id="modalSubtitle">შეარჩიე აგენტის სახელი.</p>
       <label id="roomNameWrap">ოთახის სახელი<input id="roomNameInput" maxlength="28" placeholder="მაგ. პარასკევის თამაში"></label>
       <label id="nameWrap">შენი სახელი<input id="nameInput" maxlength="18" autocomplete="nickname" placeholder="მაგ. ნინო"></label>
-      <label id="codeWrap" hidden>ოთახის კოდი<input id="codeInput" maxlength="5" inputmode="text" autocomplete="off" placeholder="ABCDE"></label>
       <label id="visibilityWrap" class="switch-row" hidden><span><b>საჯარო ოთახი</b><small>გამოჩნდება საერთო ლობიში</small></span><input id="publicRoomInput" type="checkbox" checked></label>
       <button class="primary submit" id="entrySubmit" value="default">გაგრძელება →</button>
       <p class="form-error" id="formError"></p>
@@ -87,7 +89,7 @@
 
   <section id="lobby" class="lobby hidden">
     <header class="game-header">
-      <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
+      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span><span>საიდუმლო სიტყვა</span></a>
       <div class="room-pill"><span id="lobbyRoomName">ოთახი</span><button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
       <div class="header-actions"><button class="secondary small" id="shareRoom">გაზიარება</button><button class="icon-btn" id="roomSettingsBtn" aria-label="ოთახის პარამეტრები">⚙</button><button class="secondary small" id="leaveLobby">ლობიში გასვლა</button></div>
     </header>
@@ -120,7 +122,7 @@
 
   <section id="game" class="game hidden">
     <header class="game-header">
-      <a class="brand compact" href="/"><span class="brand-mark">სს</span><span>საიდუმლო სიტყვა</span></a>
+      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span><span>საიდუმლო სიტყვა</span></a>
       <div class="turn-status"><span id="turnDot"></span><b id="turnText">ლურჯების სვლაა</b><small id="phaseText">ხელმძღვანელი ფიქრობს...</small></div>
       <div class="header-actions"><button class="icon-btn" id="gameSoundBtn" aria-label="ხმა">♫</button><button class="secondary small" id="rulesBtn">წესები</button></div>
     </header>

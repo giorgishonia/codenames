@@ -5,11 +5,12 @@ type Player = {
 };
 type Room = {
   code: string; name: string; isPublic: boolean; hostId: string; players: Player[];
-  chat: any[]; game: any; createdAt: number;
+  chat: any[]; game: any; createdAt: number; lastActivity: number;
 };
 
 const rooms = new Map<string, Room>();
 const clients = new Map<string, Client>();
+const ROOM_INACTIVITY_MS = 5 * 60 * 1000;
 const ROOM_SCHEMA = `CREATE TABLE IF NOT EXISTS game_rooms (
   code TEXT PRIMARY KEY,
   state TEXT NOT NULL,
@@ -82,7 +83,9 @@ const publicRoom = (room: Room, selfId?: string) => {
     chat: room.chat, game
   };
 };
-const lobbyList = () => [...rooms.values()].filter(room => room.isPublic).map(room => ({
+const lobbyList = () => [...rooms.values()].filter(room =>
+  room.isPublic && room.players.some(player => player.connected)
+).map(room => ({
   code: room.code, name: room.name, status: room.game ? "playing" : "waiting",
   players: room.players.filter(player => player.connected).length,
   avatars: room.players.filter(player => player.connected).slice(0,4).map(player => player.avatar),
@@ -141,16 +144,39 @@ async function loadWorld(db: any) {
   ]);
   rooms.clear(); clients.clear();
   for (const row of roomResult.results || []) {
-    try { rooms.set(row.code, JSON.parse(row.state)); } catch {}
+    try {
+      const room = JSON.parse(row.state);
+      room.lastActivity ||= room.createdAt;
+      rooms.set(row.code, room);
+    } catch {}
   }
   for (const row of clientResult.results || []) {
     clients.set(row.id, {room:row.room_code || undefined, player:row.player_id || undefined, lastSeen:Number(row.last_seen), queue:[]});
+  }
+  const now = Date.now();
+  const staleCodes = new Set([...rooms.values()]
+    .filter(room => now - room.lastActivity >= ROOM_INACTIVITY_MS)
+    .map(room => room.code));
+  const expiredClients = new Set<string>();
+  if (staleCodes.size) {
+    for (const [clientId, client] of clients) {
+      if (client.room && staleCodes.has(client.room)) {
+        expiredClients.add(clientId);
+        client.room = undefined; client.player = undefined;
+      }
+    }
+    staleCodes.forEach(code => rooms.delete(code));
+    await db.batch([
+      ...[...staleCodes].map(code => db.prepare("DELETE FROM game_rooms WHERE code = ?").bind(code)),
+      ...[...expiredClients].map(clientId => db.prepare("UPDATE game_clients SET room_code = NULL, player_id = NULL WHERE id = ?").bind(clientId))
+    ]);
   }
   const active = new Set(
     [...clients.values()].filter(client => Date.now() - client.lastSeen < 150_000 && client.room && client.player)
       .map(client => `${client.room}:${client.player}`)
   );
   rooms.forEach(room => room.players.forEach(player => { player.connected = active.has(`${room.code}:${player.id}`); }));
+  return expiredClients;
 }
 
 async function saveEvent(db: any, clientId: string, previousCodes: Set<string>) {
@@ -171,7 +197,7 @@ function handle(clientId: string, event: string, data: any) {
     const name = clean(data?.name, 18), roomName = clean(data?.roomName, 28);
     if (name.length < 2) return send(clientId, "error-message", "სახელი ძალიან მოკლეა.");
     if (roomName.length < 2) return send(clientId, "error-message", "ოთახს სახელი სჭირდება.");
-    const room: Room = {code:newCode(), name:roomName, isPublic:data?.isPublic !== false, hostId:"", players:[], chat:[], game:null, createdAt:Date.now()};
+    const room: Room = {code:newCode(), name:roomName, isPublic:data?.isPublic !== false, hostId:"", players:[], chat:[], game:null, createdAt:Date.now(), lastActivity:Date.now()};
     const player: Player = {id:id(), token:id(), name, avatar:random(8), team:null, role:null, host:true, connected:true};
     room.hostId = player.id; room.players.push(player); rooms.set(room.code, room);
     Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
@@ -183,6 +209,7 @@ function handle(clientId: string, event: string, data: any) {
     if (!room) return send(clientId, "error-message", "ასეთი ოთახი ვერ მოიძებნა.");
     if (name.length < 2) return send(clientId, "error-message", "სახელი ძალიან მოკლეა.");
     if (room.game) return send(clientId, "error-message", "თამაში უკვე დაწყებულია — დასაბრუნებლად გამოიყენე შენახული ბმული.");
+    room.lastActivity = Date.now();
     const player: Player = {id:id(), token:id(), name, avatar:room.players.length % 8, team:null, role:null, host:false, connected:true};
     room.players.push(player); Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
     send(clientId, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
@@ -192,13 +219,14 @@ function handle(clientId: string, event: string, data: any) {
     const room = rooms.get(clean(data?.code, 5).toUpperCase());
     const player = room?.players.find(item => item.token === data?.token);
     if (!room || !player) return;
-    player.connected = true; Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
+    room.lastActivity = Date.now(); player.connected = true; Object.assign(clients.get(clientId)!, {room:room.code, player:player.id});
     send(clientId, "room-joined", {room:publicRoom(room, player.id), token:player.token, selfId:player.id});
     emitRoom(room); broadcastLobby(); return;
   }
   const match = found(clientId);
   if (!match) return;
   const {room, player} = match;
+  room.lastActivity = Date.now();
   if (event === "update-room-settings" && player.host) {
     const name = clean(data?.name, 28);
     if (name.length < 2) return send(clientId, "error-message", "ოთახს სახელი სჭირდება.");
@@ -276,10 +304,11 @@ export async function handleGameRequest(request: Request, db: D1Database): Promi
     return Response.json({clientId});
   }
   if (url.pathname === "/api/v2/event" && request.method === "POST") {
-    await loadWorld(primary);
+    const expiredClients = await loadWorld(primary);
     const message = await request.json() as any;
     const client = clients.get(message?.clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
+    if (expiredClients.has(message.clientId)) send(message.clientId, "room-expired");
     client.lastSeen = Date.now();
     if (client.room && client.player) {
       const player = rooms.get(client.room)?.players.find(item => item.id === client.player);
@@ -291,7 +320,7 @@ export async function handleGameRequest(request: Request, db: D1Database): Promi
     return Response.json(client.queue.splice(0,100));
   }
   if (url.pathname === "/api/v2/poll" && request.method === "GET") {
-    await loadWorld(primary);
+    const expiredClients = await loadWorld(primary);
     const clientId = url.searchParams.get("client") || "";
     const client = clients.get(clientId);
     if (!client) return Response.json({error:"expired"}, {status:410});
@@ -301,7 +330,8 @@ export async function handleGameRequest(request: Request, db: D1Database): Promi
       if (player) player.connected = true;
     }
     await primary.prepare("UPDATE game_clients SET last_seen = ? WHERE id = ?").bind(client.lastSeen, clientId).run();
-    const messages: {event:string;data?:unknown}[] = [{event:"lobby-list", data:lobbyList()}];
+    const messages: {event:string;data?:unknown}[] = expiredClients.has(clientId) ? [{event:"room-expired"}] : [];
+    messages.push({event:"lobby-list", data:lobbyList()});
     if (client.room && client.player) {
       const room = rooms.get(client.room);
       if (room) {

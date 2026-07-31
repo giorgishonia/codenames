@@ -38,11 +38,12 @@ function realtimeSocket(){
   };
   return api
 }
-const socket=realtimeSocket();
+const socket=globalThis.io
+  ? globalThis.io({autoConnect:false})
+  : realtimeSocket();
 const $=id=>document.getElementById(id);
 const screens=["landing","lobby","game"];
 const state={room:null,selfId:null,mode:"create",sound:localStorage.getItem("ss-sound")!=="off",compact:localStorage.getItem("ss-compact")==="on",rooms:[],filter:"all",lastPhase:null,lastRevealed:0};
-const avatarPos=["0% 0%","33.333% 0%","66.666% 0%","100% 0%","0% 100%","33.333% 100%","66.666% 100%","100% 100%"];
 let audioCtx;
 
 function showScreen(name){screens.forEach(id=>$(id).classList.toggle("hidden",id!==name))}
@@ -61,11 +62,16 @@ function syncSettings(){
   document.body.classList.toggle("body-compact",state.compact)
 }
 function openEntry(mode,prefill=""){
+  const savedName=localStorage.getItem("ss-name")?.trim();
+  if(mode==="join"&&savedName?.length>=2&&prefill.length===5){
+    connectAnd("join-room",{name:savedName,code:prefill,reconnectToken:localStorage.getItem("ss-token")});
+    return
+  }
   state.mode=mode;state.joinCode=prefill;
   $("modalTitle").textContent=mode==="create"?"ახალი ოთახი":"ოთახში შესვლა";
   $("modalSubtitle").textContent=mode==="create"?"დაარქვი ოპერაციას სახელი.":"შეიყვანე შენი სახელი — შემდეგ ჯერზე დაგიმახსოვრებთ.";
-  $("roomNameWrap").hidden=mode!=="create";$("nameWrap").hidden=mode==="create";$("visibilityWrap").hidden=true;$("codeWrap").hidden=true;
-  $("roomNameInput").required=mode==="create";$("nameInput").required=mode==="join";$("codeInput").required=false;$("codeInput").value=prefill;
+  $("roomNameWrap").hidden=mode!=="create";$("nameWrap").hidden=mode==="create";$("visibilityWrap").hidden=true;
+  $("roomNameInput").required=mode==="create";$("nameInput").required=mode==="join";
   $("nameInput").value=localStorage.getItem("ss-name")||"";$("formError").textContent="";
   $("entryModal").showModal();setTimeout(()=>$(mode==="create"?"roomNameInput":"nameInput").focus(),50)
 }
@@ -83,7 +89,7 @@ function enter(e){
   else{payload.roomName=roomName;payload.isPublic=true}
   connectAnd(state.mode==="create"?"create-room":"join-room",payload)
 }
-function avatar(index,extra=""){return`<span class="agent-avatar ${extra}" style="background-position:${avatarPos[index%8]}"></span>`}
+function avatar(index,extra=""){return`<span class="agent-avatar ${extra}" style="background-image:url('/cards/neutral-${Number(index)%10}.webp')"></span>`}
 function chip(p){return`<span class="agent-chip ${p.id===state.selfId?"me":""}">${avatar(p.avatar)}<span>${esc(p.name)}${p.host?' <i class="host">★</i>':""}</span></span>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function players(team,role){return state.room.players.filter(p=>p.team===team&&p.role===role)}
@@ -181,12 +187,16 @@ $("endTurn").onclick=()=>socket.emit("end-turn");$("backToLobby").onclick=()=>{s
 $("chatForm").onsubmit=e=>{e.preventDefault();const text=$("chatInput").value.trim();if(text){socket.emit("send-chat",{text});$("chatInput").value=""}};
 $("clueCount").insertAdjacentHTML("beforeend",'<option value="0">0</option>');for(let i=1;i<=9;i++)$("clueCount").insertAdjacentHTML("beforeend",`<option value="${i}">${i}</option>`);$("clueCount").insertAdjacentHTML("beforeend",'<option value="99">∞</option>');
 
-socket.on("lobby-list",rooms=>{state.rooms=rooms;renderPublicRooms()});
+socket.on("lobby-list",rooms=>{state.rooms=rooms.filter(room=>room.players>0);renderPublicRooms()});
 socket.on("room-joined",({room,token,selfId})=>{localStorage.setItem("ss-token",token);localStorage.setItem("ss-room",room.code);state.selfId=selfId;$("entryModal").close();applyRoom(room);sound("clue")});
 socket.on("room-state",applyRoom);
 socket.on("game-over",({winner,reason})=>{const self=state.room?.players.find(p=>p.id===state.selfId);if(!$("resultModal").open)sound(winner===self?.team?"win":"lose");$("resultSeal").classList.toggle("red",winner==="red");$("resultTitle").textContent=`${winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს!`;$("resultText").textContent=reason;$("backToLobby").disabled=!self?.host;$("backToLobby").textContent=self?.host?"რემატჩი — ლობიში დაბრუნება":"ველოდებით მასპინძელს…";if(!$("resultModal").open)$("resultModal").showModal()});
 socket.on("error-message",msg=>{$("formError").textContent=msg;toast(msg)});
 socket.on("disconnect",()=>{if(state.room)toast("კავშირი გაწყდა — ვცდილობთ დაბრუნებას...")});
+socket.on("room-expired",()=>{
+  state.room=null;state.selfId=null;localStorage.removeItem("ss-room");localStorage.removeItem("ss-token");localStorage.removeItem("ss-last-room");
+  history.replaceState({},"","/");document.title="საიდუმლო სიტყვა";showScreen("landing");refreshRejoin();toast("ოთახი 5 წუთის უმოქმედობის გამო დაიხურა");socket.emit("list-rooms")
+});
 socket.on("connect",()=>{
   socket.emit("list-rooms");
   const pathCode=location.pathname.match(/^\/room\/([A-Z2-9]{5})$/i)?.[1]?.toUpperCase(),saved=localStorage.getItem("ss-room"),token=localStorage.getItem("ss-token");

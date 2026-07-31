@@ -6,8 +6,9 @@ export const metadata: Metadata = {
   description:
     "გუნდური სიტყვების თამაში მეგობრებისთვის — ლობი, რეალურ დროში თამაში და ავტომატური დაბრუნება.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/saidumlo-logo.png?v=1",
+    shortcut: "/saidumlo-logo.png?v=1",
+    apple: "/saidumlo-logo.png?v=1",
   },
 };
 

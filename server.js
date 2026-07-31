@@ -7,7 +7,7 @@ import {fileURLToPath} from "node:url";
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const app=express(),server=http.createServer(app),io=new Server(server,{pingTimeout:20000,pingInterval:10000});
-const PORT=process.env.PORT||3000,rooms=new Map();
+const PORT=process.env.PORT||3000,rooms=new Map(),ROOM_INACTIVITY_MS=Number(process.env.ROOM_INACTIVITY_MS)||5*60*1000;
 const WORDS=["მთა","ზღვა","მზე","მთვარე","ვარსკვლავი","წვიმა","ქარი","თოვლი","ღრუბელი","ტყე","მდინარე","ხიდი","კოშკი","სახლი","ქუჩა","ქალაქი","სოფელი","ბაღი","ყვავილი","ხე","ფოთოლი","ვაშლი","ღვინო","პური","ყავა","ჩაი","სუფრა","წიგნი","კალამი","წერილი","გასაღები","საათი","სარკე","ფანჯარა","კარი","სკამი","მაგიდა","ხალიჩა","ტელეფონი","რადიო","მატარებელი","გემი","თვითმფრინავი","მანქანა","ველოსიპედი","გზა","რუკა","კომპასი","ოქრო","ვერცხლი","ბრილიანტი","გვირგვინი","მეფე","დედოფალი","რაინდი","დრაკონი","მზვერავი","ნიღაბი","ჩრდილი","საიდუმლო","სიზმარი","სიმღერა","ცეკვა","თეატრი","კინო","სცენა","ფოტო","ფერი","ხმა","სინათლე","ცეცხლი","წყალი","ყინული","ქვა","ქვიშა","კუნძული","უდაბნო","ოკეანე","ნავსადგური","ბაზარი","მუზეუმი","სკოლა","ექიმი","მასწავლებელი","მზარეული","მფრინავი","მეკარე","ბურთი","ჭადრაკი","თასი","მედალი","ბილეთი","საჩუქარი","დღე","ღამე","გაზაფხული","ზაფხული","შემოდგომა","ზამთარი"];
 const CARD_ART={
   blue:["blue-0.webp","blue-7.webp","blue-8.webp","blue-11.webp","blue-13.webp","blue-19.webp","blue-21.webp","blue-23.webp","blue-24.webp"],
@@ -25,8 +25,17 @@ const publicRoom=(room,selfId)=>{
   return{code:room.code,name:room.name,isPublic:room.isPublic,selfId,hostId:room.hostId,canStart:canStart(room),players:room.players.map(({token,removeTimer,lastChatAt,...p})=>p),chat:room.chat,game};
 };
 const canStart=r=>r.players.filter(p=>p.connected).length>=4&&["blue","red"].every(t=>r.players.some(p=>p.connected&&p.team===t&&p.role==="spymaster")&&r.players.some(p=>p.connected&&p.team===t&&p.role==="operative"));
-const lobbyList=()=>[...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,name:r.name,status:r.game?"playing":"waiting",players:r.players.filter(p=>p.connected).length,avatars:r.players.filter(p=>p.connected).slice(0,4).map(p=>p.avatar),createdAt:r.createdAt})).sort((a,b)=>b.createdAt-a.createdAt);
+const lobbyList=()=>[...rooms.values()].filter(r=>r.isPublic&&r.players.some(p=>p.connected)).map(r=>({code:r.code,name:r.name,status:r.game?"playing":"waiting",players:r.players.filter(p=>p.connected).length,avatars:r.players.filter(p=>p.connected).slice(0,4).map(p=>p.avatar),createdAt:r.createdAt})).sort((a,b)=>b.createdAt-a.createdAt);
 function broadcastLobbyList(){io.emit("lobby-list",lobbyList())}
+function touch(room){room.lastActivity=Date.now()}
+function expireRoom(room){
+  if(!rooms.delete(room.code))return;
+  for(const p of room.players){
+    const client=p.socketId&&io.sockets.sockets.get(p.socketId);
+    if(client){client.leave(room.code);client.data={};client.emit("room-expired")}
+  }
+  broadcastLobbyList()
+}
 function emitRoom(room){for(const p of room.players)if(p.socketId)io.to(p.socketId).emit("room-state",publicRoom(room,p.id))}
 function findPlayer(socket){const room=rooms.get(socket.data.room);return room&&[room,room.players.find(p=>p.id===socket.data.player)]}
 function newGame(){
@@ -45,62 +54,62 @@ io.on("connection",socket=>{
   socket.on("list-rooms",()=>socket.emit("lobby-list",lobbyList()));
   socket.on("create-room",data=>{
     const name=clean(data?.name,18),roomName=clean(data?.roomName,28);if(name.length<2)return socket.emit("error-message","სახელი ძალიან მოკლეა.");if(roomName.length<2)return socket.emit("error-message","ოთახს სახელი სჭირდება.");
-    const room={code:code(),name:roomName,isPublic:data?.isPublic!==false,hostId:null,players:[],chat:[],game:null,createdAt:Date.now()},p={id:crypto.randomUUID(),token:token(),socketId:socket.id,name,avatar:crypto.randomInt(8),team:null,role:null,host:true,connected:true};
+    const room={code:code(),name:roomName,isPublic:data?.isPublic!==false,hostId:null,players:[],chat:[],game:null,createdAt:Date.now(),lastActivity:Date.now()},p={id:crypto.randomUUID(),token:token(),socketId:socket.id,name,avatar:crypto.randomInt(8),team:null,role:null,host:true,connected:true};
     room.hostId=p.id;room.players.push(p);rooms.set(room.code,room);socket.join(room.code);socket.data={room:room.code,player:p.id};socket.emit("room-joined",{room:publicRoom(room,p.id),token:p.token,selfId:p.id});broadcastLobbyList()
   });
   socket.on("join-room",data=>{
     const room=rooms.get(clean(data?.code,5).toUpperCase()),name=clean(data?.name,18);if(!room)return socket.emit("error-message","ასეთი ოთახი ვერ მოიძებნა.");if(name.length<2)return socket.emit("error-message","სახელი ძალიან მოკლეა.");if(room.game)return socket.emit("error-message","თამაში უკვე დაწყებულია.");
-    const p={id:crypto.randomUUID(),token:token(),socketId:socket.id,name,avatar:room.players.length%8,team:null,role:null,host:false,connected:true};room.players.push(p);socket.join(room.code);socket.data={room:room.code,player:p.id};socket.emit("room-joined",{room:publicRoom(room,p.id),token:p.token,selfId:p.id});emitRoom(room);broadcastLobbyList()
+    const p={id:crypto.randomUUID(),token:token(),socketId:socket.id,name,avatar:room.players.length%8,team:null,role:null,host:false,connected:true};touch(room);room.players.push(p);socket.join(room.code);socket.data={room:room.code,player:p.id};socket.emit("room-joined",{room:publicRoom(room,p.id),token:p.token,selfId:p.id});emitRoom(room);broadcastLobbyList()
   });
   socket.on("reconnect-room",data=>{
     const room=rooms.get(clean(data?.code,5).toUpperCase()),p=room?.players.find(x=>x.token===data?.token);if(!room||!p)return;
-    p.socketId=socket.id;p.connected=true;clearTimeout(p.removeTimer);socket.join(room.code);socket.data={room:room.code,player:p.id};socket.emit("room-joined",{room:publicRoom(room,p.id),token:p.token,selfId:p.id});emitRoom(room);broadcastLobbyList()
+    touch(room);p.socketId=socket.id;p.connected=true;clearTimeout(p.removeTimer);socket.join(room.code);socket.data={room:room.code,player:p.id};socket.emit("room-joined",{room:publicRoom(room,p.id),token:p.token,selfId:p.id});emitRoom(room);broadcastLobbyList()
   });
   socket.on("update-room-settings",data=>{
-    const found=findPlayer(socket);if(!found)return;const[room,p]=found;if(!p.host)return;
+    const found=findPlayer(socket);if(!found)return;const[room,p]=found;touch(room);if(!p.host)return;
     const name=clean(data?.name,28);if(name.length<2)return socket.emit("error-message","ოთახს სახელი სჭირდება.");
     room.name=name;room.isPublic=data?.isPublic!==false;emitRoom(room);broadcastLobbyList()
   });
   socket.on("choose-role",data=>{
-    const found=findPlayer(socket);if(!found)return;const [room,p]=found,team=["blue","red"].includes(data?.team)&&data.team,role=["spymaster","operative"].includes(data?.role)&&data.role;if(!team||!role||room.game)return;
+    const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);const team=["blue","red"].includes(data?.team)&&data.team,role=["spymaster","operative"].includes(data?.role)&&data.role;if(!team||!role||room.game)return;
     p.team=team;p.role=role;emitRoom(room);broadcastLobbyList()
   });
   socket.on("quick-role",data=>{
-    const found=findPlayer(socket);if(!found)return;const[room,p]=found;if(room.game)return;
+    const found=findPlayer(socket);if(!found)return;const[room,p]=found;touch(room);if(room.game)return;
     if(data?.mode==="observer"){p.team=null;p.role=null}
     else{const blue=room.players.filter(x=>x.team==="blue").length,red=room.players.filter(x=>x.team==="red").length;p.team=blue<=red?"blue":"red";p.role="operative"}
     emitRoom(room);broadcastLobbyList()
   });
   socket.on("send-chat",data=>{
-    const found=findPlayer(socket);if(!found)return;const[room,p]=found,text=clean(data?.text,160);if(!text||p.role==="spymaster"&&room.game)return;
+    const found=findPlayer(socket);if(!found)return;const[room,p]=found;touch(room);const text=clean(data?.text,160);if(!text||p.role==="spymaster"&&room.game)return;
     if(p.lastChatAt&&Date.now()-p.lastChatAt<700)return;p.lastChatAt=Date.now();
     room.chat.push({id:crypto.randomUUID(),actor:p.name,playerId:p.id,team:p.team,text,time:Date.now()});if(room.chat.length>50)room.chat.shift();emitRoom(room)
   });
   socket.on("start-game",()=>{
-    const found=findPlayer(socket);if(!found)return;const [room,p]=found;if(!p.host||!canStart(room))return socket.emit("error-message","გუნდები ჯერ მზად არ არიან.");
+    const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);if(!p.host||!canStart(room))return socket.emit("error-message","გუნდები ჯერ მზად არ არიან.");
     room.game=newGame();emitRoom(room);broadcastLobbyList()
   });
   socket.on("give-clue",data=>{
-    const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game,word=clean(data?.word,24).replace(/\s+/g,""),count=Number(data?.count);if(!g||g.winner||p.role!=="spymaster"||p.team!==g.turn||g.phase!=="clue")return;
+    const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);const g=room.game,word=clean(data?.word,24).replace(/\s+/g,""),count=Number(data?.count);if(!g||g.winner||p.role!=="spymaster"||p.team!==g.turn||g.phase!=="clue")return;
     if(word.length<2||!([0,1,2,3,4,5,6,7,8,9,99].includes(count)))return socket.emit("error-message","მინიშნება და რაოდენობა გადაამოწმე.");
     if(g.board.some(c=>{const card=c.word.toLowerCase(),clue=word.toLowerCase(),min=Math.min(card.length,clue.length);return!c.revealed&&(card===clue||min>=4&&(card.startsWith(clue)||clue.startsWith(card)))}))return socket.emit("error-message","დაფაზე არსებული სიტყვის ან მისი აშკარა ფორმის გამოყენება არ შეიძლება.");
     g.clue={word,count};g.pendingGuess=null;g.guessesLeft=count===0||count===99?99:count+1;g.phase="guess";g.log.push({actor:p.name,text:`მისცა მინიშნება „${word}“ · ${count===99?"∞":count}.`});emitRoom(room)
   });
   socket.on("suggest-card",data=>{
-    const found=findPlayer(socket);if(!found)return;const[room,p]=found,g=room.game,i=Number(data?.index),card=g?.board[i];
+    const found=findPlayer(socket);if(!found)return;const[room,p]=found;touch(room);const g=room.game,i=Number(data?.index),card=g?.board[i];
     if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
     g.pendingGuess={index:i,actor:p.name};emitRoom(room)
   });
   socket.on("guess-card",data=>{
-    const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game,i=g?.pendingGuess?.index,card=g?.board[i];if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
+    const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);const g=room.game,i=g?.pendingGuess?.index,card=g?.board[i];if(!g||g.winner||p.role!=="operative"||p.team!==g.turn||g.phase!=="guess"||!card||card.revealed)return;
     g.pendingGuess=null;card.revealed=true;g.log.push({actor:p.name,text:`დაადასტურა „${card.word}“ — ${card.type==="blue"?"ლურჯი":card.type==="red"?"წითელი":card.type==="neutral"?"ნეიტრალური":"შავი აგენტი"}.`});
     if(card.type==="assassin")return win(room,p.team==="blue"?"red":"blue","შავი აგენტი გაიხსნა — ოპერაცია ჩავარდა.");
     if(card.type==="blue"||card.type==="red"){g.remaining[card.type]--;if(g.remaining[card.type]===0)return win(room,card.type,"გუნდმა ყველა თავისი აგენტი იპოვა.")}
     if(card.type!==p.team)return switchTurn(g),emitRoom(room);
     if(g.guessesLeft!==99)g.guessesLeft--;if(g.guessesLeft===0)switchTurn(g);emitRoom(room)
   });
-  socket.on("end-turn",()=>{const found=findPlayer(socket);if(!found)return;const [room,p]=found,g=room.game;if(g&&!g.winner&&p.role==="operative"&&p.team===g.turn&&g.phase==="guess"){switchTurn(g);emitRoom(room)}});
-  socket.on("back-to-lobby",()=>{const found=findPlayer(socket);if(!found)return;const [room,p]=found;if(p.host){room.game=null;emitRoom(room);broadcastLobbyList()}});
+  socket.on("end-turn",()=>{const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);const g=room.game;if(g&&!g.winner&&p.role==="operative"&&p.team===g.turn&&g.phase==="guess"){switchTurn(g);emitRoom(room)}});
+  socket.on("back-to-lobby",()=>{const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);if(p.host){room.game=null;emitRoom(room);broadcastLobbyList()}});
   socket.on("leave-room",()=>disconnectPlayer(socket,true));
   socket.on("disconnect",()=>disconnectPlayer(socket,false))
 });
@@ -109,5 +118,5 @@ function disconnectPlayer(socket,immediate){
   const remove=()=>{const idx=room.players.findIndex(x=>x.id===p.id);if(idx<0||room.players[idx].connected)return;room.players.splice(idx,1);if(p.host&&room.players.length){room.players[0].host=true;room.hostId=room.players[0].id}if(!room.players.length)rooms.delete(room.code);else emitRoom(room);broadcastLobbyList()};
   if(immediate)remove();else p.removeTimer=setTimeout(remove,5*60*1000);emitRoom(room);broadcastLobbyList()
 }
-setInterval(()=>{const now=Date.now();for(const [key,r]of rooms)if(!r.players.some(p=>p.connected)&&now-r.createdAt>6*60*60*1000)rooms.delete(key)},30*60*1000).unref();
+setInterval(()=>{const now=Date.now();for(const room of rooms.values())if(now-(room.lastActivity||room.createdAt)>=ROOM_INACTIVITY_MS)expireRoom(room)},Math.min(10*1000,ROOM_INACTIVITY_MS)).unref();
 server.listen(PORT,()=>console.log(`საიდუმლო სიტყვა მზადაა: http://localhost:${PORT}`));
