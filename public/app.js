@@ -147,16 +147,24 @@ function cardMarks(picks){
   return`<span class="card-marks ${picks.length>2?"dense":""}">${marks}${extra>0?`<span class="card-mark more">+${extra}</span>`:""}</span>`
 }
 function renderBoard(g,self,over){
-  const board=$("board"),fingerprint=g.board.map(c=>`${c.word}\u0000${c.art||""}`).join("\u0001");
+  const board=$("board"),fingerprint=g.board.map(c=>c.word).join("\u0001"),isSpy=self?.role==="spymaster";
   if(board.dataset.fingerprint!==fingerprint||board.children.length!==g.board.length){
     board.innerHTML=g.board.map((c,i)=>`<button class="card" data-card="${i}">${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}<span class="card-word">${esc(c.word)}</span></button>`).join("");
     board.dataset.fingerprint=fingerprint
   }
   g.board.forEach((c,i)=>{
     const button=board.children[i],open=c.revealed||over&&!!c.type,cls=open?c.type:(c.type?`key-${c.type}`:""),picks=(g.picks||[]).filter(v=>v.index===i);
-    const className=`card ${open?"revealed":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
+    const tracked=button.dataset.revealed!==undefined,wasRevealed=button.dataset.revealed==="true",justRevealed=tracked&&!wasRevealed&&c.revealed&&!isSpy;
+    const className=`card ${open?"revealed":""} ${justRevealed?"reveal-anim":""} ${isSpy&&c.revealed?"spymaster-revealed":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
     if(button.className!==className)button.className=className;
     button.disabled=c.revealed||over||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative";
+    button.dataset.revealed=String(!!c.revealed);
+    let art=button.querySelector(".card-art");
+    if(c.art&&art?.dataset.art!==c.art){
+      if(!art){button.insertAdjacentHTML("afterbegin",`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`);art=button.querySelector(".card-art")}
+      else art.src=`/cards/${c.art}`;
+      art.dataset.art=c.art
+    }
     const picksKey=JSON.stringify(picks.map(v=>[v.playerId,v.name,v.avatar,v.team]));
     if(button.dataset.picks!==picksKey){
       button.querySelector(".card-marks")?.remove();
