@@ -45,6 +45,71 @@ const $=id=>document.getElementById(id);
 const screens=["landing","lobby","game"];
 const state={room:null,selfId:null,mode:"create",sound:localStorage.getItem("ss-sound")!=="off",compact:localStorage.getItem("ss-compact")==="on",rooms:[],filter:"all",lastPhase:null,lastRevealed:0,cluePicks:new Set(),cluePickKey:""};
 let audioCtx;
+// Discord-ის პირადი ბმული: /room/CODE?d=TOKEN — token-ს ვიმახსოვრებთ და მისამართს ვასუფთავებთ.
+state.discordToken=new URLSearchParams(location.search).get("d")||"";
+if(state.discordToken)history.replaceState({},"",location.pathname);
+
+/* ------------------------------------------------ Discord-ით შესვლა ------ */
+// Supabase Auth-ის implicit flow: დაბრუნებისას token-ები URL-ის hash-შია.
+function readAuthHash(){
+  if(!location.hash.includes("access_token="))return false;
+  const params=new URLSearchParams(location.hash.slice(1));
+  const token=params.get("access_token");
+  if(token){
+    localStorage.setItem("ss-auth",JSON.stringify({token,refresh:params.get("refresh_token")||"",expires:Date.now()+(Number(params.get("expires_in"))||3600)*1000}));
+  }
+  history.replaceState({},"",location.pathname+location.search);
+  return !!token
+}
+function storedAuth(){
+  const saved=safeJson(localStorage.getItem("ss-auth"));
+  if(!saved?.token)return null;
+  if(saved.expires&&saved.expires<Date.now()){localStorage.removeItem("ss-auth");return null}
+  return saved
+}
+const authToken=()=>storedAuth()?.token||undefined;
+async function loadConfig(){
+  try{state.config=await (await fetch("/api/config",{cache:"no-store"})).json()}catch{state.config={auth:{enabled:false}}}
+  return state.config
+}
+function signIn(){
+  const auth=state.config?.auth;
+  if(!auth?.enabled)return toast("Discord ლოგინი ჯერ არ არის ჩართული");
+  const back=`${location.origin}${location.pathname}${location.search}`;
+  location.href=`${auth.supabaseUrl}/auth/v1/authorize?provider=discord&redirect_to=${encodeURIComponent(back)}`
+}
+function signOut(){
+  const saved=storedAuth();
+  localStorage.removeItem("ss-auth");state.profile=null;
+  if(saved&&state.config?.auth?.supabaseUrl)fetch(`${state.config.auth.supabaseUrl}/auth/v1/logout`,{method:"POST",headers:{apikey:state.config.auth.anonKey,authorization:`Bearer ${saved.token}`}}).catch(()=>{});
+  renderAuth();toast("გამოხვედი ანგარიშიდან")
+}
+async function loadProfile(){
+  const saved=storedAuth();
+  if(!saved||!state.config?.auth?.enabled){state.profile=null;return null}
+  try{
+    const response=await fetch(`${state.config.auth.supabaseUrl}/auth/v1/user`,{headers:{apikey:state.config.auth.anonKey,authorization:`Bearer ${saved.token}`}});
+    if(!response.ok){localStorage.removeItem("ss-auth");state.profile=null;return null}
+    const user=await response.json(),identity=(user.identities||[]).find(item=>item.provider==="discord");
+    const meta={...user.user_metadata,...identity?.identity_data};
+    state.profile={
+      name:(meta.custom_claims?.global_name||meta.full_name||meta.name||meta.user_name||"").trim().slice(0,18),
+      avatarUrl:meta.avatar_url||meta.picture||null
+    };
+    if(state.profile.name&&!localStorage.getItem("ss-name"))localStorage.setItem("ss-name",state.profile.name);
+    return state.profile
+  }catch{return null}
+}
+function renderAuth(){
+  const enabled=!!state.config?.auth?.enabled,profile=state.profile;
+  $("authArea").classList.toggle("hidden",!enabled);
+  $("signInBtn").classList.toggle("hidden",!!profile);
+  $("authUser").classList.toggle("hidden",!profile);
+  if(profile){
+    $("authUser").innerHTML=`${avatar(profile)}<b>${esc(profile.name||"აგენტი")}</b><button id="signOutBtn" title="გასვლა" aria-label="გასვლა">⏻</button>`;
+    $("signOutBtn").onclick=signOut
+  }
+}
 
 function showScreen(name){screens.forEach(id=>$(id).classList.toggle("hidden",id!==name))}
 function toast(text){$("toast").textContent=text;$("toast").classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),2400)}
@@ -65,7 +130,7 @@ function openEntry(mode,prefill=""){
   const savedName=localStorage.getItem("ss-name")?.trim();
   if(mode==="join"&&savedName?.length>=2&&prefill.length===5){
     const reconnectToken=localStorage.getItem("ss-token"),savedRoom=localStorage.getItem("ss-room");
-    connectAnd(reconnectToken&&savedRoom===prefill?"reconnect-room":"join-room",{name:savedName,code:prefill,reconnectToken,token:reconnectToken});
+    connectAnd(reconnectToken&&savedRoom===prefill?"reconnect-room":"join-room",{name:savedName,code:prefill,reconnectToken,token:reconnectToken,discordToken:state.discordToken||undefined,authToken:authToken()});
     return
   }
   state.mode=mode;state.joinCode=prefill;
@@ -85,19 +150,24 @@ function enter(e){
   if(state.mode==="create"&&roomName.length<2)return $("formError").textContent="ოთახს მოკლე სახელი მაინც სჭირდება.";
   if(!name){name=`მოთამაშე-${Math.floor(1000+Math.random()*9000)}`}
   localStorage.setItem("ss-name",name);
-  const payload={name,reconnectToken:localStorage.getItem("ss-token")};
+  const payload={name,reconnectToken:localStorage.getItem("ss-token"),discordToken:state.discordToken||undefined,authToken:authToken()};
   if(state.mode==="join"){if(!code||code.length!==5)return $("formError").textContent="ოთახის კოდი ვერ მოიძებნა.";payload.code=code}
   else{payload.roomName=roomName;payload.isPublic=true}
   connectAnd(state.mode==="create"?"create-room":"join-room",payload)
 }
-function avatar(index,extra=""){return`<span class="agent-avatar ${extra}" style="background-image:url('/cards/neutral-${Number(index)%10}.webp')"></span>`}
+// მიიღებს ან ინდექსს, ან მოთამაშეს {avatar,avatarUrl} — Discord-ის ფოტო პრიორიტეტულია.
+function avatar(source,extra=""){
+  const player=source&&typeof source==="object"?source:{avatar:source};
+  const image=player.avatarUrl||`/cards/neutral-${Number(player.avatar)%10||0}.webp`;
+  return`<span class="agent-avatar ${player.avatarUrl?"photo":""} ${typeof extra==="string"?extra:""}" style="background-image:url('${esc(image)}')"></span>`
+}
 function offlineStatus(p){return p.connected?"":'<span class="wifi-off" role="img" aria-label="გათიშულია" title="კავშირი გაწყვეტილია"></span>'}
 function adminControls(p){
   const self=state.room?.players.find(player=>player.id===state.selfId);
   if(!self?.host||p.id===state.selfId)return"";
   return`<span class="player-admin"><button type="button" data-player-action="promote" data-player-id="${p.id}" title="მასპინძლად დანიშვნა" aria-label="${esc(p.name)} — მასპინძლად დანიშვნა">♛</button><button type="button" data-player-action="kick" data-player-id="${p.id}" title="ოთახიდან გაშვება" aria-label="${esc(p.name)} — ოთახიდან გაშვება">↗</button><button type="button" data-player-action="ban" data-player-id="${p.id}" title="დაბლოკვა" aria-label="${esc(p.name)} — დაბლოკვა">⊘</button></span>`
 }
-function chip(p){return`<span class="agent-chip ${p.id===state.selfId?"me":""} ${p.connected?"":"offline"}">${avatar(p.avatar)}<span>${esc(p.name)}${p.host?' <i class="host">★</i>':""}</span>${offlineStatus(p)}${adminControls(p)}</span>`}
+function chip(p){return`<span class="agent-chip ${p.id===state.selfId?"me":""} ${p.connected?"":"offline"}">${avatar(p)}<span>${esc(p.name)}${p.host?' <i class="host">★</i>':""}</span>${offlineStatus(p)}${adminControls(p)}</span>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function players(team,role){return state.room.players.filter(p=>p.team===team&&p.role===role)}
 
@@ -109,7 +179,7 @@ function renderPublicRooms(){
   $("roomsGrid").classList.toggle("hidden",!filtered.length);$("emptyRooms").classList.toggle("hidden",!!filtered.length);
   $("roomsGrid").innerHTML=filtered.map(r=>`<article class="public-room ${r.status}">
     <div class="room-card-head"><div><h3>${esc(r.name)}</h3><span class="room-code"># ${esc(r.code)}</span></div><span class="room-status">${r.status==="waiting"?"ღიაა":"თამაშშია"}</span></div>
-    <div class="room-card-body"><div class="room-people">${r.avatars.slice(0,4).map(avatar).join("")}<b>${r.players} მოთამაშე</b></div>
+    <div class="room-card-body"><div class="room-people">${r.avatars.slice(0,4).map((index,i)=>avatar({avatar:index,avatarUrl:r.avatarUrls?.[i]})).join("")}<b>${r.players} მოთამაშე</b></div>
     <button class="join-public" data-room-code="${esc(r.code)}" ${r.status!=="waiting"?"disabled":""}>${r.status==="waiting"?"შესვლა →":"მიმდინარეობს"}</button></div>
   </article>`).join("")
 }
@@ -135,7 +205,7 @@ function renderLobby(){
   $("startGame").classList.toggle("hidden",!self?.host);$("startGame").disabled=!r.canStart;$("roomSettingsBtn").classList.toggle("hidden",!self?.host);
   $("lobbyHint").textContent=r.canStart?(self?.host?"ყველაფერი მზადაა — დაიწყე ოპერაცია!":"ველოდებით მასპინძელს..."):"მინიმუმ 4 მოთამაშე და 2 ხელმძღვანელია საჭირო"
 }
-function gamePlayer(p){return`<div class="game-player ${p.connected?"":"offline"}">${avatar(p.avatar)}<span>${esc(p.name)}<small>${p.role==="spymaster"?"ხელმძღვანელი":"ოპერატივი"}${p.connected?"":" · გათიშულია"}</small></span>${offlineStatus(p)}</div>`}
+function gamePlayer(p){return`<div class="game-player ${p.connected?"":"offline"}">${avatar(p)}<span>${esc(p.name)}<small>${p.role==="spymaster"?"ხელმძღვანელი":"ოპერატივი"}${p.connected?"":" · გათიშულია"}</small></span>${offlineStatus(p)}</div>`}
 function renderTeam(team,target){
   const group=(role,label)=>{const list=players(team,role);return`<div class="roster-group"><h4>${label}</h4><div class="roster-row">${list.length?list.map(gamePlayer).join(""):'<span class="empty-slot">ცარიელია</span>'}</div></div>`};
   $(target).innerHTML=group("operative","ოპერატივები")+group("spymaster","ხელმძღვანელები")
@@ -143,7 +213,7 @@ function renderTeam(team,target){
 function cardMarks(picks){
   if(!picks.length)return"";
   const shown=picks.slice(0,4),extra=picks.length-shown.length;
-  const marks=shown.map(v=>`<span class="card-mark ${v.team||""}" title="${esc(v.name)}">${avatar(v.avatar)}<b>${esc(v.name)}</b></span>`).join("");
+  const marks=shown.map(v=>`<span class="card-mark ${v.team||""}" title="${esc(v.name)}">${avatar(v)}<b>${esc(v.name)}</b></span>`).join("");
   return`<span class="card-marks ${picks.length>2?"dense":""}">${marks}${extra>0?`<span class="card-mark more">+${extra}</span>`:""}</span>`
 }
 function updateClueSelection(){
@@ -233,6 +303,9 @@ function updatePhaseTimer(){
 }
 function applyRoom(room){
   state.room=room;state.selfId=room.selfId||state.selfId;if(!room.game?.winner)state.resultKey=null;
+  // შესული ვარ, მაგრამ სერვერზე ანგარიში ჯერ არ მიბმულა (მაგ. reload-ის შემდეგ) — ვასწორებთ.
+  const self=room.players?.find(p=>p.id===state.selfId);
+  if(state.profile&&self&&!self.discord&&!state.identitySent){state.identitySent=true;socket.emit("refresh-identity",{authToken:authToken()})}
   localStorage.setItem("ss-last-room",JSON.stringify({code:room.code,name:room.name}));history.replaceState({}, "",`/room/${room.code}`);
   if(room.game){showScreen("game");renderGame()}else{if($("resultModal").open)$("resultModal").close();showScreen("lobby");renderLobby()}
 }
@@ -257,6 +330,13 @@ $("roomSettingsBtn").onclick=()=>{
   const settings=state.room.settings||{},selected=new Set(state.room.wordCategories||[]);
   $("editRoomName").value=state.room.name;$("editRoomPublic").checked=state.room.isPublic;$("editClueTime").value=settings.clueTime||90;$("editGuessTime").value=settings.guessTime||120;$("editRoundTime").value=settings.roundTime||240;
   $("wordCategoryError").textContent="";
+  const voice=state.room.voice||{},mode=voice.mode||settings.voiceMode||"mute";
+  document.querySelectorAll('input[name="voiceMode"]').forEach(input=>{input.checked=input.value===mode});
+  $("voiceSettingsHint").textContent=!voice.enabled?"Discord ბოტი ჯერ არ არის დაკონფიგურირებული (სერვერზე ტოკენი აკლია)"
+    :voice.issues?.length?`⚠ ხმოვან არხში არ არის: ${voice.issues.join(", ")} — ბოტი მათ ვერ დაამუტებს`
+    :!voice.linked?"ვერცერთი მოთამაშე ვერ დაუკავშირდა Discord-ს — შედით „Discord-ით შესვლა“-ით"
+    :`Discord-ით დაკავშირებულია ${voice.linked} მოთამაშე${voice.guild?"":" · სერვერი ავტომატურად შეირჩევა"}`;
+  $("voiceSettings").classList.toggle("inactive",!voice.enabled);
   $("wordCategoryOptions").innerHTML=(state.room.wordCategoryOptions||[]).map(pack=>`<label class="word-category"><input type="checkbox" name="wordCategory" value="${esc(pack.id)}" ${selected.has(pack.id)?"checked":""}><span><b>${esc(pack.label)}</b><small>${esc(pack.description)} · ${pack.count} სიტყვა</small></span></label>`).join("");
   $("roomSettingsModal").showModal()
 };
@@ -264,7 +344,8 @@ $("roomSettingsForm").onsubmit=e=>{
   e.preventDefault();
   const wordCategories=[...document.querySelectorAll('input[name="wordCategory"]:checked')].map(input=>input.value);
   if(!wordCategories.length){$("wordCategoryError").textContent="მინიმუმ ერთი კატეგორია აირჩიე.";$("wordCategoryOptions").scrollIntoView({behavior:"smooth",block:"nearest"});return}
-  socket.emit("update-room-settings",{name:$("editRoomName").value.trim(),isPublic:$("editRoomPublic").checked,wordCategories,settings:{clueTime:Number($("editClueTime").value),guessTime:Number($("editGuessTime").value),roundTime:Number($("editRoundTime").value)}});
+  const voiceMode=document.querySelector('input[name="voiceMode"]:checked')?.value||"mute";
+  socket.emit("update-room-settings",{name:$("editRoomName").value.trim(),isPublic:$("editRoomPublic").checked,wordCategories,settings:{clueTime:Number($("editClueTime").value),guessTime:Number($("editGuessTime").value),roundTime:Number($("editRoundTime").value),voiceMode}});
   $("roomSettingsModal").close()
 };
 document.addEventListener("click",e=>{const button=e.target.closest?.("[data-player-action]");if(!button)return;e.preventDefault();e.stopPropagation();const action=button.dataset.playerAction,player=state.room?.players.find(p=>p.id===button.dataset.playerId);if(!player)return;if(action!=="promote"&&!confirm(`${player.name} — ნამდვილად გინდა ${action==="ban"?"დაბლოკვა":"ოთახიდან გაშვება"}?`))return;button.disabled=true;socket.emit("moderate-player",{action,playerId:player.id})});
@@ -317,9 +398,16 @@ socket.on("removed-from-room",({reason})=>{
 socket.on("connect",()=>{
   socket.emit("list-rooms");
   const pathCode=location.pathname.match(/^\/room\/([A-Z2-9]{5})$/i)?.[1]?.toUpperCase(),saved=localStorage.getItem("ss-room"),token=localStorage.getItem("ss-token");
-  if(pathCode&&saved===pathCode&&token)socket.emit("reconnect-room",{code:pathCode,token});
+  if(pathCode&&saved===pathCode&&token)socket.emit("reconnect-room",{code:pathCode,token,authToken:authToken()});
   else if(pathCode&&!state.room)openEntry("join",pathCode)
 });
 window.addEventListener("popstate",()=>{if(location.pathname==="/"&&!state.room){showScreen("landing");socket.emit("list-rooms")}});
 window.addEventListener("resize",fitMobileCardWords);
 setInterval(updatePhaseTimer,500);syncSettings();refreshRejoin();socket.connect();
+$("signInBtn").onclick=signIn;
+readAuthHash();
+loadConfig().then(loadProfile).then(()=>{
+  renderAuth();
+  const self=state.room?.players?.find(p=>p.id===state.selfId);
+  if(state.profile&&state.room&&!self?.discord){state.identitySent=true;socket.emit("refresh-identity",{authToken:authToken()})}
+});

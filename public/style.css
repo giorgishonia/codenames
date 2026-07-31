@@ -136,12 +136,12 @@ button{cursor:pointer}
 .join-public:hover{filter:brightness(1.08)}
 .join-public:disabled{background:rgba(255,255,255,.08);color:var(--faint);box-shadow:none;cursor:not-allowed}
 
-.empty-rooms{text-align:center;padding:58px 20px}
+.empty-rooms{text-align:center;padding:7px 20px}
 .empty-seal{width:92px;height:92px;margin:auto;border-radius:26px;overflow:hidden;background:var(--navy-1);box-shadow:0 0 0 1px var(--line),0 20px 44px rgba(1,159,253,.2)}
 .empty-seal img{display:block;width:100%;height:100%;object-fit:cover}
 .empty-rooms h2{margin:20px 0 8px;font-size:24px}
 .empty-rooms p{margin:0;font-size:14px;color:var(--muted)}
-.empty-rooms button{margin-top:20px}
+.empty-rooms button{margin-top:20px }
 .browser-footer{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:48px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:11px}
 .browser-footer>span{font-size:14px;font-style:italic;color:var(--muted)}
 .browser-footer b{margin:0 8px;color:var(--line-2)}
@@ -293,6 +293,32 @@ button{cursor:pointer}
 .word-category b{font-size:11px;color:#fff}
 .word-category small{margin-top:3px;color:var(--muted);font-size:8px;line-height:1.3}
 .word-pack-settings .form-error{min-height:14px;margin:7px 0 0}
+
+/* Discord — შესვლა და პროფილი */
+.auth-area{display:flex;align-items:center;gap:10px}
+.discord-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:0;border-radius:12px;background:#5865f2;color:#fff;font-size:12px;font-weight:800;box-shadow:0 6px 18px rgba(88,101,242,.35);transition:.16s ease}
+.discord-btn:hover{background:#4752c4;transform:translateY(-1px)}
+.discord-btn svg{width:19px;height:auto}
+.auth-user{display:inline-flex;align-items:center;gap:9px;padding:5px 8px 5px 5px;border:1px solid var(--line);border-radius:24px;background:rgba(255,255,255,.06)}
+.auth-user .agent-avatar{width:30px;height:30px;border-width:2px}
+.auth-user b{font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auth-user button{width:26px;height:26px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:var(--muted);font-size:12px}
+.auth-user button:hover{background:rgba(253,76,74,.2);color:var(--red)}
+.agent-avatar.photo{background-position:center;background-color:var(--navy-2)}
+
+/* Discord — ხელმძღვანელის ხმის რეჟიმი */
+.voice-settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.voice-settings h3{margin:0;font-size:13px}
+.voice-settings>div:first-child>small{display:block;margin-top:3px;color:var(--muted);font-size:9px;line-height:1.4}
+.voice-settings.inactive{opacity:.55}
+.voice-option{display:flex!important;align-items:center;gap:10px;margin:8px 0 0!important;padding:11px!important;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.035);cursor:pointer}
+.voice-option:has(input:checked){border-color:rgba(1,159,253,.6);background:rgba(1,159,253,.1)}
+.voice-option input{appearance:none;flex:0 0 auto;width:18px!important;height:18px;margin:0!important;padding:0!important;border:1px solid var(--line-2)!important;border-radius:50%!important;background:rgba(255,255,255,.05)!important}
+.voice-option input:checked{border-color:var(--blue)!important;background:var(--blue)!important;box-shadow:inset 0 0 0 4px var(--navy)!important}
+.voice-option span{min-width:0}
+.voice-option b,.voice-option small{display:block}
+.voice-option b{font-size:11px;color:#fff}
+.voice-option small{margin-top:3px;color:var(--muted);font-size:8px;line-height:1.35}
 #roomSettingsModal{width:min(620px,calc(100% - 30px))}
 
 .blue-panel:after{content:"";flex:0 0 auto;margin-top:auto;height:clamp(80px,13vh,130px);background:url("/saidumlo-logo.png") center/contain no-repeat;opacity:.13;filter:saturate(1.2)}
@@ -458,7 +484,7 @@ button{cursor:pointer}
   .search-box input{width:100%}
   .rooms-grid{grid-template-columns:1fr}
   .rejoin-panel{padding:15px 40px 15px 14px}
-  .modal form{padding:32px 24px}
+  .modal form{padding:32px 24px; overflow: hidden}
   .modal h2{font-size:25px}
   .special-rules{grid-template-columns:1fr}
   .game{height:100dvh;min-height:0;overflow:hidden}

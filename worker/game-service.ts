@@ -8,14 +8,14 @@ type Player = {
 type Room = {
   code: string; name: string; isPublic: boolean; hostId: string; players: Player[];
   chat: any[]; game: any; createdAt: number; lastActivity: number;
-  settings: {clueTime:number; guessTime:number; roundTime:number}; wordCategories: string[]; bannedTokens: string[];
+  settings: {clueTime:number; guessTime:number; roundTime:number; voiceMode:string}; wordCategories: string[]; bannedTokens: string[];
   removedPlayers: Record<string, {reason:string; ban:boolean}>;
 };
 
 const rooms = new Map<string, Room>();
 const clients = new Map<string, Client>();
 const ROOM_INACTIVITY_MS = 5 * 60 * 1000;
-const DEFAULT_GAME_SETTINGS = {clueTime:90, guessTime:120, roundTime:240};
+const DEFAULT_GAME_SETTINGS = {clueTime:90, guessTime:120, roundTime:240, voiceMode:"mute"};
 const ROOM_SCHEMA = `CREATE TABLE IF NOT EXISTS game_rooms (
   code TEXT PRIMARY KEY,
   state TEXT NOT NULL,
@@ -50,7 +50,8 @@ const clean = (value: unknown, max = 24) => String(value ?? "").replace(/[<>]/g,
 const gameSettings = (value: any) => ({
   clueTime:Math.min(600, Math.max(15, Number(value?.clueTime) || DEFAULT_GAME_SETTINGS.clueTime)),
   guessTime:Math.min(900, Math.max(15, Number(value?.guessTime) || DEFAULT_GAME_SETTINGS.guessTime)),
-  roundTime:Math.min(1200, Math.max(30, Number(value?.roundTime) || DEFAULT_GAME_SETTINGS.roundTime))
+  roundTime:Math.min(1200, Math.max(30, Number(value?.roundTime) || DEFAULT_GAME_SETTINGS.roundTime)),
+  voiceMode:["off","mute","hardcore"].includes(value?.voiceMode) ? value.voiceMode : DEFAULT_GAME_SETTINGS.voiceMode
 });
 const guessAllowance = (count: number) => count === 0 || count === 99 ? 99 : count + 1;
 const random = (max: number) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
@@ -375,7 +376,7 @@ function handle(clientId: string, event: string, data: any) {
     if (!game || game.winner || player.role !== "operative" || player.team !== game.turn || game.phase !== "guess" || !card || card.revealed) return;
     const picks = (game.picks ||= []) as any[], existing = picks.findIndex(pick => pick.playerId === player.id && pick.index === index);
     if (existing >= 0) picks.splice(existing, 1);
-    else picks.push({playerId:player.id, name:player.name, avatar:player.avatar, team:player.team, index});
+    else picks.push({playerId:player.id, name:player.name, avatar:player.avatar, avatarUrl:(player as any).avatarUrl||null, team:player.team, index});
     const last = game.picks[game.picks.length - 1];
     game.pendingGuess = last ? {index:last.index, actor:last.name} : null;
     emitRoom(room);

@@ -132,7 +132,7 @@ test("host controls, moderation, settings, and automatic succession",async()=>{
     const settingsChanged=until(clients[0],"room-state",room=>room.settings?.clueTime===45&&room.wordCategories?.join(",")==="science,ideas");
     clients[0].emit("update-room-settings",{name:"Host Controls",isPublic:true,wordCategories:["science","ideas"],settings:{clueTime:45,guessTime:75,roundTime:180}});
     const changedRoom=await settingsChanged;
-    assert.deepEqual(changedRoom.settings,{clueTime:45,guessTime:75,roundTime:180});
+    assert.deepEqual(changedRoom.settings,{clueTime:45,guessTime:75,roundTime:180,voiceMode:"mute"});
     assert.deepEqual(changedRoom.wordCategories,["science","ideas"]);
 
     const promoted=until(clients[1],"room-state",room=>room.players.find(player=>player.id===identities[1].selfId)?.host);

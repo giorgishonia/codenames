@@ -6,12 +6,14 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node --env-file-if-exists=.env server.js",
     "build": "vinext build",
-    "start": "node server.js",
-    "test": "node --test tests/game.test.mjs",
+    "start": "node --env-file-if-exists=.env server.js",
+    "discord:register": "node --env-file-if-exists=.env discord/register-commands.mjs",
+    "test": "node --test tests/game.test.mjs tests/voice.test.mjs tests/auth.test.mjs && node --test-force-exit --test tests/discord-flow.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "discord:check": "node --env-file-if-exists=.env discord/check.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
