@@ -249,7 +249,7 @@ button{cursor:pointer}
 .game{position:relative;z-index:1;min-height:100vh}
 .game-layout{height:calc(100vh - 76px);display:grid;grid-template-columns:262px minmax(0,1fr) 296px;gap:14px;padding:14px}
 .side-panel{display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:2px}
-.score-head{position:relative;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:var(--radius);overflow:hidden;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#fff}
+.score-head{position:relative;display:flex;flex:0 0 66px;align-items:center;justify-content:space-between;min-height:66px;padding:14px 18px;border-radius:var(--radius);overflow:hidden;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#fff}
 .blue-panel .score-head{background:linear-gradient(135deg,var(--blue),var(--blue-dark));box-shadow:var(--glow-blue)}
 .red-panel .score-head{background:linear-gradient(135deg,var(--red),var(--red-dark));box-shadow:var(--glow-red)}
 .score-head:after{content:"";position:absolute;right:-40px;top:-60px;width:140px;height:140px;border-radius:50%;border:22px solid rgba(255,255,255,.1)}

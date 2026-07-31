@@ -146,6 +146,25 @@ function cardMarks(picks){
   const marks=shown.map(v=>`<span class="card-mark ${v.team||""}" title="${esc(v.name)}">${avatar(v.avatar)}<b>${esc(v.name)}</b></span>`).join("");
   return`<span class="card-marks ${picks.length>2?"dense":""}">${marks}${extra>0?`<span class="card-mark more">+${extra}</span>`:""}</span>`
 }
+function renderBoard(g,self,over){
+  const board=$("board"),fingerprint=g.board.map(c=>`${c.word}\u0000${c.art||""}`).join("\u0001");
+  if(board.dataset.fingerprint!==fingerprint||board.children.length!==g.board.length){
+    board.innerHTML=g.board.map((c,i)=>`<button class="card" data-card="${i}">${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}<span class="card-word">${esc(c.word)}</span></button>`).join("");
+    board.dataset.fingerprint=fingerprint
+  }
+  g.board.forEach((c,i)=>{
+    const button=board.children[i],open=c.revealed||over&&!!c.type,cls=open?c.type:(c.type?`key-${c.type}`:""),picks=(g.picks||[]).filter(v=>v.index===i);
+    const className=`card ${open?"revealed":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
+    if(button.className!==className)button.className=className;
+    button.disabled=c.revealed||over||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative";
+    const picksKey=JSON.stringify(picks.map(v=>[v.playerId,v.name,v.avatar,v.team]));
+    if(button.dataset.picks!==picksKey){
+      button.querySelector(".card-marks")?.remove();
+      const marks=cardMarks(picks);if(marks)button.insertAdjacentHTML("afterbegin",marks);
+      button.dataset.picks=picksKey
+    }
+  })
+}
 function renderChat(self){
   const chat=state.room.chat||[];$("roomChat").innerHTML=chat.slice(-20).map(m=>`<div class="chat-message ${m.playerId===state.selfId?"mine":""}"><b>${esc(m.actor)}${m.team?` · ${m.team==="blue"?"ლურჯი":"წითელი"}`:""}</b>${esc(m.text)}</div>`).join("");
   $("roomChat").scrollTop=$("roomChat").scrollHeight;
@@ -160,11 +179,7 @@ function renderGame(){
   const roleText=over?"ოპერაცია დასრულდა — სრული რუკა ღიაა":!self?.team?"თვალი ადევნე ოპერაციას":myTurn?(isSpy&&g.phase==="clue"?"შენი მინიშნების დროა":self.role==="operative"&&g.phase==="guess"?"მონიშნე და დაადასტურე ბარათი":"დაელოდე შენს გუნდს"):"მეტოქის სვლაა";
   $("roleBanner").className=`role-banner ${self?.team||""}`;$("roleBanner").innerHTML=`<b>${roleTitle}</b><span>${roleText}</span>`;
   renderTeam("blue","blueTeamGame");renderTeam("red","redTeamGame");
-  $("board").innerHTML=g.board.map((c,i)=>{
-    const open=c.revealed||over&&!!c.type,cls=open?c.type:(c.type?`key-${c.type}`:""),picks=(g.picks||[]).filter(v=>v.index===i);
-    const locked=c.revealed||over||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative";
-    return`<button class="card ${open?"revealed":""} ${picks.length?"selected":""} ${cls}" data-card="${i}" ${locked?"disabled":""}>${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}${cardMarks(picks)}<span class="card-word">${esc(c.word)}</span></button>`
-  }).join("");
+  renderBoard(g,self,over);
   $("clueBanner").classList.toggle("hidden",!g.clue);if(g.clue){$("clueWord").textContent=g.clue.word;$("clueNumber").textContent=g.clue.count===99?"∞":g.clue.count}
   const clueTurn=!over&&isSpy&&myTurn&&g.phase==="clue",guessTurn=!over&&self?.role==="operative"&&myTurn&&g.phase==="guess";
   $("clueForm").classList.toggle("hidden",!clueTurn);$("guessControls").classList.toggle("hidden",!guessTurn);$("waitingControl").classList.toggle("hidden",over||clueTurn||guessTurn);
