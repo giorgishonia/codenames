@@ -64,7 +64,8 @@ function syncSettings(){
 function openEntry(mode,prefill=""){
   const savedName=localStorage.getItem("ss-name")?.trim();
   if(mode==="join"&&savedName?.length>=2&&prefill.length===5){
-    connectAnd("join-room",{name:savedName,code:prefill,reconnectToken:localStorage.getItem("ss-token")});
+    const reconnectToken=localStorage.getItem("ss-token"),savedRoom=localStorage.getItem("ss-room");
+    connectAnd(reconnectToken&&savedRoom===prefill?"reconnect-room":"join-room",{name:savedName,code:prefill,reconnectToken,token:reconnectToken});
     return
   }
   state.mode=mode;state.joinCode=prefill;
@@ -90,7 +91,13 @@ function enter(e){
   connectAnd(state.mode==="create"?"create-room":"join-room",payload)
 }
 function avatar(index,extra=""){return`<span class="agent-avatar ${extra}" style="background-image:url('/cards/neutral-${Number(index)%10}.webp')"></span>`}
-function chip(p){return`<span class="agent-chip ${p.id===state.selfId?"me":""}">${avatar(p.avatar)}<span>${esc(p.name)}${p.host?' <i class="host">★</i>':""}</span></span>`}
+function offlineStatus(p){return p.connected?"":'<span class="wifi-off" role="img" aria-label="გათიშულია" title="კავშირი გაწყვეტილია"></span>'}
+function adminControls(p){
+  const self=state.room?.players.find(player=>player.id===state.selfId);
+  if(!self?.host||p.id===state.selfId)return"";
+  return`<span class="player-admin"><button type="button" data-player-action="promote" data-player-id="${p.id}" title="მასპინძლად დანიშვნა" aria-label="${esc(p.name)} — მასპინძლად დანიშვნა">♛</button><button type="button" data-player-action="kick" data-player-id="${p.id}" title="ოთახიდან გაშვება" aria-label="${esc(p.name)} — ოთახიდან გაშვება">↗</button><button type="button" data-player-action="ban" data-player-id="${p.id}" title="დაბლოკვა" aria-label="${esc(p.name)} — დაბლოკვა">⊘</button></span>`
+}
+function chip(p){return`<span class="agent-chip ${p.id===state.selfId?"me":""} ${p.connected?"":"offline"}">${avatar(p.avatar)}<span>${esc(p.name)}${p.host?' <i class="host">★</i>':""}</span>${offlineStatus(p)}${adminControls(p)}</span>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function players(team,role){return state.room.players.filter(p=>p.team===team&&p.role===role)}
 
@@ -114,6 +121,8 @@ function refreshRejoin(){
 function safeJson(value){try{return JSON.parse(value)}catch{return null}}
 function renderLobby(){
   const r=state.room,self=r.players.find(p=>p.id===state.selfId);$("lobbyCode").textContent=r.code;$("lobbyRoomName").textContent=r.name;document.title=`${r.name} · საიდუმლო სიტყვა`;
+  const selected=new Set(r.wordCategories||[]),packLabels=(r.wordCategoryOptions||[]).filter(pack=>selected.has(pack.id)).map(pack=>pack.label);
+  $("activeWordPacks").innerHTML=`<b>სიტყვები</b><span>${packLabels.length===r.wordCategoryOptions?.length?"ყველა კატეგორია":packLabels.map(esc).join(" · ")}</span>`;
   ["blue","red"].forEach(team=>{
     const sm=players(team,"spymaster"),ops=players(team,"operative");
     $(`${team}Spymaster`).innerHTML=sm.length?sm.map(chip).join(""):'<span class="empty-slot">ადგილი თავისუფალია</span>';
@@ -122,34 +131,59 @@ function renderLobby(){
   });
   $("waitingRoster").innerHTML=r.players.filter(p=>!p.team).map(chip).join("");
   document.querySelectorAll("[data-join]").forEach(btn=>{const[team,role]=btn.dataset.join.split(":");btn.disabled=false;btn.textContent=players(team,role).some(p=>p.id===state.selfId)?"შენი ადგილი":role==="spymaster"?"ხელმძღვანელად შესვლა":"გუნდში შესვლა"});
+  $("quickTeam").classList.toggle("hidden",!self?.host);
   $("startGame").classList.toggle("hidden",!self?.host);$("startGame").disabled=!r.canStart;$("roomSettingsBtn").classList.toggle("hidden",!self?.host);
   $("lobbyHint").textContent=r.canStart?(self?.host?"ყველაფერი მზადაა — დაიწყე ოპერაცია!":"ველოდებით მასპინძელს..."):"მინიმუმ 4 მოთამაშე და 2 ხელმძღვანელია საჭირო"
 }
-function renderTeam(team,target){$(target).innerHTML=state.room.players.filter(p=>p.team===team).map(p=>`<div class="game-player ${p.connected?"":"offline"}">${avatar(p.avatar)}<span>${esc(p.name)}<small>${p.role==="spymaster"?"ხელმძღვანელი":"ოპერატივი"}${p.connected?"":" · გათიშულია"}</small></span></div>`).join("")}
+function gamePlayer(p){return`<div class="game-player ${p.connected?"":"offline"}">${avatar(p.avatar)}<span>${esc(p.name)}<small>${p.role==="spymaster"?"ხელმძღვანელი":"ოპერატივი"}${p.connected?"":" · გათიშულია"}</small></span>${offlineStatus(p)}</div>`}
+function renderTeam(team,target){
+  const group=(role,label)=>{const list=players(team,role);return`<div class="roster-group"><h4>${label}</h4><div class="roster-row">${list.length?list.map(gamePlayer).join(""):'<span class="empty-slot">ცარიელია</span>'}</div></div>`};
+  $(target).innerHTML=group("operative","ოპერატივები")+group("spymaster","ხელმძღვანელები")
+}
+function cardMarks(picks){
+  if(!picks.length)return"";
+  const shown=picks.slice(0,4),extra=picks.length-shown.length;
+  const marks=shown.map(v=>`<span class="card-mark ${v.team||""}" title="${esc(v.name)}">${avatar(v.avatar)}<b>${esc(v.name)}</b></span>`).join("");
+  return`<span class="card-marks ${picks.length>2?"dense":""}">${marks}${extra>0?`<span class="card-mark more">+${extra}</span>`:""}</span>`
+}
 function renderChat(self){
   const chat=state.room.chat||[];$("roomChat").innerHTML=chat.slice(-20).map(m=>`<div class="chat-message ${m.playerId===state.selfId?"mine":""}"><b>${esc(m.actor)}${m.team?` · ${m.team==="blue"?"ლურჯი":"წითელი"}`:""}</b>${esc(m.text)}</div>`).join("");
   $("roomChat").scrollTop=$("roomChat").scrollHeight;
   const blocked=self?.role==="spymaster";$("chatInput").disabled=blocked;$("chatForm").querySelector("button").disabled=blocked;$("chatHint").textContent=blocked?"ხელმძღვანელი თამაშის დროს ჩუმად უნდა იყოს.":"საუბარი ოთახის ყველა მოთამაშეს ესმის."
 }
 function renderGame(){
-  const g=state.room.game,self=state.room.players.find(p=>p.id===state.selfId),isSpy=self?.role==="spymaster";
+  const g=state.room.game,self=state.room.players.find(p=>p.id===state.selfId),isSpy=self?.role==="spymaster",over=!!g.winner;
   $("turnText").textContent=`${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა`;$("turnDot").style.background=g.turn==="blue"?"#25a9d3":"#e55a4c";
-  $("phaseText").textContent=`რაუნდი ${g.round||1} · ${g.phase==="clue"?"ხელმძღვანელი ფიქრობს...":"ოპერატივები არჩევენ"}`;$("blueScore").textContent=g.remaining.blue;$("redScore").textContent=g.remaining.red;
+  updatePhaseTimer();$("blueScore").textContent=g.remaining.blue;$("redScore").textContent=g.remaining.red;
   $("blueProgress").style.width=`${100-(g.remaining.blue/(g.total?.blue||9))*100}%`;$("redProgress").style.width=`${100-(g.remaining.red/(g.total?.red||9))*100}%`;
   const myTurn=self?.team===g.turn,roleTitle=!self?.team?"დამკვირვებელი":isSpy?"ხელმძღვანელი":self.role==="operative"?"ოპერატივი":"დამკვირვებელი";
-  const roleText=!self?.team?"თვალი ადევნე ოპერაციას":myTurn?(isSpy&&g.phase==="clue"?"შენი მინიშნების დროა":self.role==="operative"&&g.phase==="guess"?"მონიშნე და დაადასტურე ბარათი":"დაელოდე შენს გუნდს"):"მეტოქის სვლაა";
+  const roleText=over?"ოპერაცია დასრულდა — სრული რუკა ღიაა":!self?.team?"თვალი ადევნე ოპერაციას":myTurn?(isSpy&&g.phase==="clue"?"შენი მინიშნების დროა":self.role==="operative"&&g.phase==="guess"?"მონიშნე და დაადასტურე ბარათი":"დაელოდე შენს გუნდს"):"მეტოქის სვლაა";
   $("roleBanner").className=`role-banner ${self?.team||""}`;$("roleBanner").innerHTML=`<b>${roleTitle}</b><span>${roleText}</span>`;
   renderTeam("blue","blueTeamGame");renderTeam("red","redTeamGame");
-  $("board").innerHTML=g.board.map((c,i)=>{const cls=c.revealed?c.type:(isSpy?`key-${c.type}`:""),selected=g.pendingGuess?.index===i;return`<button class="card ${c.revealed?"revealed":""} ${selected?"selected":""} ${cls}" data-card="${i}" ${c.revealed||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative"?"disabled":""}>${c.revealed&&c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}<span class="card-word">${esc(c.word)}</span></button>`}).join("");
+  $("board").innerHTML=g.board.map((c,i)=>{
+    const open=c.revealed||over&&!!c.type,cls=open?c.type:(c.type?`key-${c.type}`:""),picks=(g.picks||[]).filter(v=>v.index===i);
+    const locked=c.revealed||over||g.phase!=="guess"||self?.team!==g.turn||self?.role!=="operative";
+    return`<button class="card ${open?"revealed":""} ${picks.length?"selected":""} ${cls}" data-card="${i}" ${locked?"disabled":""}>${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}${cardMarks(picks)}<span class="card-word">${esc(c.word)}</span></button>`
+  }).join("");
   $("clueBanner").classList.toggle("hidden",!g.clue);if(g.clue){$("clueWord").textContent=g.clue.word;$("clueNumber").textContent=g.clue.count===99?"∞":g.clue.count}
-  $("clueForm").classList.toggle("hidden",!(isSpy&&myTurn&&g.phase==="clue"));$("guessControls").classList.toggle("hidden",!(self?.role==="operative"&&myTurn&&g.phase==="guess"));$("waitingControl").classList.toggle("hidden",(isSpy&&myTurn&&g.phase==="clue")||(self?.role==="operative"&&myTurn&&g.phase==="guess"));
+  const clueTurn=!over&&isSpy&&myTurn&&g.phase==="clue",guessTurn=!over&&self?.role==="operative"&&myTurn&&g.phase==="guess";
+  $("clueForm").classList.toggle("hidden",!clueTurn);$("guessControls").classList.toggle("hidden",!guessTurn);$("waitingControl").classList.toggle("hidden",over||clueTurn||guessTurn);
+  $("gameOverControls").classList.toggle("hidden",!over);
+  if(over){$("gameOverText").textContent=`${g.winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს — ყველა ბარათი გახსნილია`;$("rematchBtn").classList.toggle("hidden",!self?.host)}
   $("confirmGuess").disabled=!g.pendingGuess;$("guessPrompt").innerHTML=g.pendingGuess?`<b>${esc(g.pendingGuess.actor)}</b>-მ მონიშნა „${esc(g.board[g.pendingGuess.index].word)}“ — დაადასტურეთ არჩევანი`:`ჯერ მონიშნეთ ბარათი — დარჩა <b id="guessesLeft">${g.guessesLeft===99?"∞":g.guessesLeft}</b> ცდა`;
   $("gameLog").innerHTML=g.log.slice(-12).reverse().map(x=>`<div class="log-entry"><b>${esc(x.actor||"სისტემა")}</b> ${esc(x.text)}</div>`).join("");
   renderChat(self);
   const revealed=g.board.filter(c=>c.revealed).length;if(revealed>state.lastRevealed)sound("reveal");if(state.lastPhase==="clue"&&g.phase==="guess")sound("clue");state.lastRevealed=revealed;state.lastPhase=g.phase
 }
+function updatePhaseTimer(){
+  const g=state.room?.game;if(!g)return;
+  const label=g.phase==="clue"?"ხელმძღვანელი ფიქრობს":"ოპერატივები არჩევენ",deadline=Math.min(g.phaseDeadline||Infinity,g.roundDeadline||Infinity);
+  const seconds=Number.isFinite(deadline)?Math.max(0,Math.ceil((deadline-Date.now())/1000)):0,clock=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
+  $("phaseText").textContent=`რაუნდი ${g.round||1} · ${label} · ${clock}`;
+  $("mobileTimerClock").textContent=clock
+}
 function applyRoom(room){
-  state.room=room;state.selfId=room.selfId||state.selfId;
+  state.room=room;state.selfId=room.selfId||state.selfId;if(!room.game?.winner)state.resultKey=null;
   localStorage.setItem("ss-last-room",JSON.stringify({code:room.code,name:room.name}));history.replaceState({}, "",`/room/${room.code}`);
   if(room.game){showScreen("game");renderGame()}else{if($("resultModal").open)$("resultModal").close();showScreen("lobby");renderLobby()}
 }
@@ -157,11 +191,6 @@ function leave(){
   socket.emit("leave-room");state.room=null;state.selfId=null;localStorage.removeItem("ss-room");localStorage.removeItem("ss-token");localStorage.removeItem("ss-last-room");
   history.pushState({},"","/");document.title="საიდუმლო სიტყვა";showScreen("landing");refreshRejoin();socket.emit("list-rooms")
 }
-async function shareRoom(){
-  const url=`${location.origin}/room/${state.room.code}`,data={title:state.room.name,text:`შემოგვიერთდი ოთახში — კოდი ${state.room.code}`,url};
-  try{if(navigator.share)await navigator.share(data);else{await navigator.clipboard.writeText(url);toast("ოთახის ბმული დაკოპირდა")}}catch{}
-}
-
 $("openCreate").onclick=$("emptyCreate").onclick=()=>openEntry("create");
 $("entryForm").onsubmit=enter;$("rulesLobbyBtn").onclick=$("rulesBtn").onclick=()=>$("rulesModal").showModal();
 $("settingsBtn").onclick=()=>{$("settingsModal").showModal();syncSettings()};
@@ -174,28 +203,55 @@ $("refreshRooms").onclick=()=>{$("refreshRooms").classList.remove("spinning");vo
 $("rejoinBtn").onclick=()=>connectAnd("reconnect-room",{code:$("rejoinBtn").dataset.code,token:localStorage.getItem("ss-token")});
 $("dismissRejoin").onclick=()=>{sessionStorage.setItem("ss-dismiss-rejoin","1");refreshRejoin()};
 $("copyCode").onclick=async()=>{await navigator.clipboard.writeText(state.room.code);toast("ოთახის კოდი დაკოპირდა")};
-$("shareRoom").onclick=shareRoom;$("leaveLobby").onclick=leave;
-$("roomSettingsBtn").onclick=()=>{$("editRoomName").value=state.room.name;$("editRoomPublic").checked=state.room.isPublic;$("roomSettingsModal").showModal()};
-$("roomSettingsForm").onsubmit=e=>{e.preventDefault();socket.emit("update-room-settings",{name:$("editRoomName").value.trim(),isPublic:$("editRoomPublic").checked});$("roomSettingsModal").close()};
+$("leaveLobby").onclick=leave;
+$("roomSettingsBtn").onclick=()=>{
+  const settings=state.room.settings||{},selected=new Set(state.room.wordCategories||[]);
+  $("editRoomName").value=state.room.name;$("editRoomPublic").checked=state.room.isPublic;$("editClueTime").value=settings.clueTime||90;$("editGuessTime").value=settings.guessTime||120;$("editRoundTime").value=settings.roundTime||240;
+  $("wordCategoryError").textContent="";
+  $("wordCategoryOptions").innerHTML=(state.room.wordCategoryOptions||[]).map(pack=>`<label class="word-category"><input type="checkbox" name="wordCategory" value="${esc(pack.id)}" ${selected.has(pack.id)?"checked":""}><span><b>${esc(pack.label)}</b><small>${esc(pack.description)} · ${pack.count} სიტყვა</small></span></label>`).join("");
+  $("roomSettingsModal").showModal()
+};
+$("roomSettingsForm").onsubmit=e=>{
+  e.preventDefault();
+  const wordCategories=[...document.querySelectorAll('input[name="wordCategory"]:checked')].map(input=>input.value);
+  if(!wordCategories.length){$("wordCategoryError").textContent="მინიმუმ ერთი კატეგორია აირჩიე.";$("wordCategoryOptions").scrollIntoView({behavior:"smooth",block:"nearest"});return}
+  socket.emit("update-room-settings",{name:$("editRoomName").value.trim(),isPublic:$("editRoomPublic").checked,wordCategories,settings:{clueTime:Number($("editClueTime").value),guessTime:Number($("editGuessTime").value),roundTime:Number($("editRoundTime").value)}});
+  $("roomSettingsModal").close()
+};
+document.addEventListener("click",e=>{const button=e.target.closest?.("[data-player-action]");if(!button)return;e.preventDefault();e.stopPropagation();const action=button.dataset.playerAction,player=state.room?.players.find(p=>p.id===button.dataset.playerId);if(!player)return;if(action!=="promote"&&!confirm(`${player.name} — ნამდვილად გინდა ${action==="ban"?"დაბლოკვა":"ოთახიდან გაშვება"}?`))return;button.disabled=true;socket.emit("moderate-player",{action,playerId:player.id})});
 document.querySelectorAll("[data-join]").forEach(btn=>btn.onclick=()=>{const[team,role]=btn.dataset.join.split(":");socket.emit("choose-role",{team,role})});
 $("quickTeam").onclick=()=>socket.emit("quick-role",{mode:"auto"});$("observeGame").onclick=()=>socket.emit("quick-role",{mode:"observer"});
 $("startGame").onclick=()=>socket.emit("start-game");
 $("clueForm").onsubmit=e=>{e.preventDefault();socket.emit("give-clue",{word:$("clueInput").value.trim(),count:Number($("clueCount").value)});$("clueInput").value=""};
 $("board").onclick=e=>{const card=e.target.closest("[data-card]");if(card)socket.emit("suggest-card",{index:Number(card.dataset.card)})};
 $("confirmGuess").onclick=()=>socket.emit("guess-card");
-$("endTurn").onclick=()=>socket.emit("end-turn");$("backToLobby").onclick=()=>{socket.emit("back-to-lobby");$("resultModal").close()};
+$("endTurn").onclick=()=>socket.emit("end-turn");
+$("backToLobby").onclick=$("rematchBtn").onclick=()=>{clearTimeout(state.resultTimer);socket.emit("back-to-lobby");$("resultModal").close()};
+$("resultModal").onclick=e=>{if(e.target===$("resultModal")){clearTimeout(state.resultTimer);$("resultModal").close()}};
 $("chatForm").onsubmit=e=>{e.preventDefault();const text=$("chatInput").value.trim();if(text){socket.emit("send-chat",{text});$("chatInput").value=""}};
 $("clueCount").insertAdjacentHTML("beforeend",'<option value="0">0</option>');for(let i=1;i<=9;i++)$("clueCount").insertAdjacentHTML("beforeend",`<option value="${i}">${i}</option>`);$("clueCount").insertAdjacentHTML("beforeend",'<option value="99">∞</option>');
 
 socket.on("lobby-list",rooms=>{state.rooms=rooms.filter(room=>room.players>0);renderPublicRooms()});
 socket.on("room-joined",({room,token,selfId})=>{localStorage.setItem("ss-token",token);localStorage.setItem("ss-room",room.code);state.selfId=selfId;$("entryModal").close();applyRoom(room);sound("clue")});
 socket.on("room-state",applyRoom);
-socket.on("game-over",({winner,reason})=>{const self=state.room?.players.find(p=>p.id===state.selfId);if(!$("resultModal").open)sound(winner===self?.team?"win":"lose");$("resultSeal").classList.toggle("red",winner==="red");$("resultTitle").textContent=`${winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს!`;$("resultText").textContent=reason;$("backToLobby").disabled=!self?.host;$("backToLobby").textContent=self?.host?"რემატჩი — ლობიში დაბრუნება":"ველოდებით მასპინძელს…";if(!$("resultModal").open)$("resultModal").showModal()});
+socket.on("game-over",({winner,reason})=>{
+  const self=state.room?.players.find(p=>p.id===state.selfId),key=`${state.room?.code||""}:${winner}`;
+  if(state.resultKey===key)return;state.resultKey=key;
+  sound(winner===self?.team?"win":"lose");
+  $("resultSeal").classList.toggle("red",winner==="red");$("resultTitle").textContent=`${winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს!`;$("resultText").textContent=reason;
+  $("backToLobby").disabled=!self?.host;$("backToLobby").textContent=self?.host?"რემატჩი — ლობიში დაბრუნება":"ველოდებით მასპინძელს…";
+  $("resultModal").showModal();clearTimeout(state.resultTimer);state.resultTimer=setTimeout(()=>$("resultModal").close(),3400)
+});
 socket.on("error-message",msg=>{$("formError").textContent=msg;toast(msg)});
+socket.on("moderation-result",({message})=>toast(message));
 socket.on("disconnect",()=>{if(state.room)toast("კავშირი გაწყდა — ვცდილობთ დაბრუნებას...")});
 socket.on("room-expired",()=>{
   state.room=null;state.selfId=null;localStorage.removeItem("ss-room");localStorage.removeItem("ss-token");localStorage.removeItem("ss-last-room");
   history.replaceState({},"","/");document.title="საიდუმლო სიტყვა";showScreen("landing");refreshRejoin();toast("ოთახი 5 წუთის უმოქმედობის გამო დაიხურა");socket.emit("list-rooms")
+});
+socket.on("removed-from-room",({reason})=>{
+  state.room=null;state.selfId=null;localStorage.removeItem("ss-room");localStorage.removeItem("ss-token");localStorage.removeItem("ss-last-room");
+  history.replaceState({},"","/");document.title="საიდუმლო სიტყვა";showScreen("landing");refreshRejoin();toast(reason||"ოთახიდან გამოხვედი");socket.emit("list-rooms")
 });
 socket.on("connect",()=>{
   socket.emit("list-rooms");
@@ -204,4 +260,4 @@ socket.on("connect",()=>{
   else if(pathCode&&!state.room)openEntry("join",pathCode)
 });
 window.addEventListener("popstate",()=>{if(location.pathname==="/"&&!state.room){showScreen("landing");socket.emit("list-rooms")}});
-syncSettings();refreshRejoin();socket.connect();
+setInterval(updatePhaseTimer,500);syncSettings();refreshRejoin();socket.connect();

@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111820">
+  <meta name="theme-color" content="#020e2f">
   <meta name="description" content="საიდუმლო სიტყვა — ქართული ონლაინ გუნდური სიტყვების თამაში">
   <title>საიდუმლო სიტყვა</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=1">
   <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1">
-  <link rel="apple-touch-icon" href="/saidumlo-logo.png?v=1">
-  <link rel="stylesheet" href="/style.css?v=4">
+  <link rel="apple-touch-icon" href="/saidumlo-logo.png?v=2">
+  <link rel="preload" as="image" href="/saidumlo-logo.png?v=2">
+  <link rel="stylesheet" href="/style.css?v=13">
   <script src="/socket.io/socket.io.js" defer></script>
-  <script src="/app.js?v=17" defer></script>
+  <script src="/app.js?v=27" defer></script>
 </head>
 <body>
   <div class="noise"></div>
@@ -20,7 +21,7 @@
   <section id="landing" class="lobby-browser">
     <header class="browser-header">
       <a class="brand" href="/" aria-label="საიდუმლო სიტყვა — ლობები">
-        <span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span>
+        <span class="brand-mark"><img src="/saidumlo-logo.png?v=2" alt=""></span>
         <span>საიდუმლო სიტყვა</span>
       </a>
       <nav>
@@ -32,6 +33,7 @@
 
     <main class="browser-main">
       <section class="browser-title">
+        <div class="title-emblem"><img src="/saidumlo-logo.png?v=2" alt="საიდუმლო სიტყვა"></div>
         <div>
           <div class="eyebrow"><span></span> საერთო ლობი</div>
           <h1>აირჩიე ოპერაცია</h1>
@@ -61,7 +63,7 @@
         </div>
         <div id="roomsGrid" class="rooms-grid"></div>
         <div id="emptyRooms" class="empty-rooms hidden">
-          <div class="empty-seal">სს</div><h2>ღია ოთახები ჯერ არ არის</h2>
+          <div class="empty-seal"><img src="/saidumlo-logo.png?v=2" alt=""></div><h2>ღია ოთახები ჯერ არ არის</h2>
           <p>იყავი პირველი — შექმენი ოთახი და გაუზიარე მეგობრებს.</p>
           <button class="primary big" id="emptyCreate">შექმენი პირველი ოთახი</button>
         </div>
@@ -90,15 +92,16 @@
 
   <section id="lobby" class="lobby hidden">
     <header class="game-header">
-      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span><span>საიდუმლო სიტყვა</span></a>
+      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=2" alt=""></span><span>საიდუმლო სიტყვა</span></a>
       <div class="room-pill"><span id="lobbyRoomName">ოთახი</span><button id="copyCode"><b id="lobbyCode">—</b> ⧉</button></div>
-      <div class="header-actions"><button class="secondary small" id="shareRoom">გაზიარება</button><button class="icon-btn" id="roomSettingsBtn" aria-label="ოთახის პარამეტრები">⚙</button><button class="secondary small" id="leaveLobby">ლობიში გასვლა</button></div>
+      <div class="header-actions"><button class="icon-btn" id="roomSettingsBtn" aria-label="ოთახის პარამეტრები">⚙</button><button class="secondary small" id="leaveLobby">ლობიში გასვლა</button></div>
     </header>
     <main class="lobby-main">
       <div class="lobby-intro">
         <div class="eyebrow"><span></span> ოპერაციის ბრიფინგი</div>
         <h2>აირჩიე შენი მხარე</h2>
         <p>თითოეულ გუნდს სჭირდება ერთი ხელმძღვანელი. მას მთელი საიდუმლო რუკა ეცოდინება.</p>
+        <div id="activeWordPacks" class="active-word-packs"></div>
         <div class="quick-roles"><button id="quickTeam" class="secondary">⚡ სწრაფი განაწილება</button><button id="observeGame" class="secondary">◉ დამკვირვებლად დარჩენა</button></div>
         <div id="waitingRoster" class="waiting-roster"></div>
       </div>
@@ -123,7 +126,7 @@
 
   <section id="game" class="game hidden">
     <header class="game-header">
-      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=1" alt=""></span><span>საიდუმლო სიტყვა</span></a>
+      <a class="brand compact" href="/"><span class="brand-mark"><img src="/saidumlo-logo.png?v=2" alt=""></span><span>საიდუმლო სიტყვა</span></a>
       <div class="turn-status"><span id="turnDot"></span><b id="turnText">ლურჯების სვლაა</b><small id="phaseText">ხელმძღვანელი ფიქრობს...</small></div>
       <div class="header-actions"><button class="icon-btn" id="gameSoundBtn" aria-label="ხმა">♫</button><button class="secondary small" id="rulesBtn">წესები</button></div>
     </header>
@@ -138,6 +141,7 @@
       <section class="board-zone">
         <div id="roleBanner" class="role-banner"><b>დამკვირვებელი</b><span>თვალი ადევნე ოპერაციას</span></div>
         <div id="clueBanner" class="clue-banner hidden"><span>მინიშნება</span><b id="clueWord">—</b><i id="clueNumber">0</i></div>
+        <div class="mobile-timer" aria-label="დარჩენილი დრო"><span>დარჩენილი დრო</span><b id="mobileTimerClock">0:00</b></div>
         <div id="board" class="board" aria-label="სიტყვების დაფა"></div>
         <div class="control-dock">
           <form id="clueForm" class="clue-form hidden">
@@ -150,6 +154,10 @@
             <div class="guess-actions"><button id="confirmGuess" class="primary" disabled>არჩევანის დადასტურება</button><button id="endTurn" class="secondary">სვლის დასრულება</button></div>
           </div>
           <p id="waitingControl" class="waiting-control">დაელოდეთ ხელმძღვანელის მინიშნებას...</p>
+          <div id="gameOverControls" class="gameover-controls hidden">
+            <b id="gameOverText">ოპერაცია დასრულებულია</b>
+            <button id="rematchBtn" class="primary small">რემატჩი — ლობიში დაბრუნება</button>
+          </div>
         </div>
       </section>
 
@@ -199,14 +207,27 @@
       <div class="modal-stamp">ოთახის პარამეტრები</div><h2>ოპერაციის მართვა</h2>
       <label>ოთახის სახელი<input id="editRoomName" maxlength="28"></label>
       <label class="switch-row"><span><b>საჯარო ოთახი</b><small>ყველას შეეძლება საერთო ლობიდან შემოსვლა</small></span><input id="editRoomPublic" type="checkbox"></label>
+      <div class="timer-settings">
+        <h3>თამაშის დროები</h3>
+        <label>ხელმძღვანელის დრო (წამი)<input id="editClueTime" type="number" min="15" max="600" required></label>
+        <label>გამოცნობის დრო (წამი)<input id="editGuessTime" type="number" min="15" max="900" required></label>
+        <label>მთელი რაუნდის დრო (წამი)<input id="editRoundTime" type="number" min="30" max="1200" required></label>
+      </div>
+      <div class="word-pack-settings">
+        <div><h3>სიტყვების კატეგორიები</h3><small>აირჩიე ერთი ან რამდენიმე — დაფაზე მათი სიტყვები აირევა</small></div>
+        <div id="wordCategoryOptions" class="word-category-options"></div>
+        <p id="wordCategoryError" class="form-error"></p>
+      </div>
       <button class="primary submit">ცვლილებების შენახვა</button>
     </form>
   </dialog>
 
   <dialog id="resultModal" class="modal result-modal">
     <form method="dialog">
+      <button class="modal-close" value="cancel" aria-label="დახურვა">×</button>
       <div id="resultSeal" class="result-seal">✓</div><h2 id="resultTitle">ოპერაცია დასრულებულია</h2><p id="resultText"></p>
       <button class="primary submit" id="backToLobby">ლობიში დაბრუნება</button>
+      <small class="result-hint">დაფაზე ყველა ბარათი გაიხსნა — ფანჯარა თავად დაიხურება</small>
     </form>
   </dialog>
 </body>
