@@ -43,7 +43,7 @@ const socket=globalThis.io
   : realtimeSocket();
 const $=id=>document.getElementById(id);
 const screens=["landing","lobby","game"];
-const state={room:null,selfId:null,mode:"create",sound:localStorage.getItem("ss-sound")!=="off",compact:localStorage.getItem("ss-compact")==="on",rooms:[],filter:"all",lastPhase:null,lastRevealed:0};
+const state={room:null,selfId:null,mode:"create",sound:localStorage.getItem("ss-sound")!=="off",compact:localStorage.getItem("ss-compact")==="on",rooms:[],filter:"all",lastPhase:null,lastRevealed:0,cluePicks:new Set(),cluePickKey:""};
 let audioCtx;
 
 function showScreen(name){screens.forEach(id=>$(id).classList.toggle("hidden",id!==name))}
@@ -146,6 +146,11 @@ function cardMarks(picks){
   const marks=shown.map(v=>`<span class="card-mark ${v.team||""}" title="${esc(v.name)}">${avatar(v.avatar)}<b>${esc(v.name)}</b></span>`).join("");
   return`<span class="card-marks ${picks.length>2?"dense":""}">${marks}${extra>0?`<span class="card-mark more">+${extra}</span>`:""}</span>`
 }
+function updateClueSelection(){
+  const count=state.cluePicks.size;
+  $("clueSelectionCount").textContent=count;
+  $("giveClueButton").disabled=count<1
+}
 function renderBoard(g,self,over){
   const board=$("board"),fingerprint=g.board.map(c=>c.word).join("\u0001"),isSpy=self?.role==="spymaster";
   if(board.dataset.fingerprint!==fingerprint||board.children.length!==g.board.length){
@@ -155,10 +160,12 @@ function renderBoard(g,self,over){
   g.board.forEach((c,i)=>{
     const button=board.children[i],open=c.revealed||over&&!!c.type,cls=open?c.type:(c.type?`key-${c.type}`:""),picks=(g.picks||[]).filter(v=>v.index===i);
     const tracked=button.dataset.revealed!==undefined,wasRevealed=button.dataset.revealed==="true",justRevealed=tracked&&!wasRevealed&&c.revealed&&!isSpy;
-    const className=`card ${open?"revealed":""} ${justRevealed?"reveal-anim":""} ${isSpy&&c.revealed?"spymaster-revealed":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
+    const clueTarget=state.cluePicks.has(i);
+    const className=`card ${open?"revealed":""} ${justRevealed?"reveal-anim":""} ${isSpy&&c.revealed?"spymaster-revealed":""} ${clueTarget?"clue-target":""} ${picks.length?"selected":""} ${cls}`.replace(/\s+/g," ").trim();
     if(button.className!==className)button.className=className;
     const canChoose=!c.revealed&&!over&&g.phase==="guess"&&self?.team===g.turn&&self?.role==="operative";
-    button.disabled=!canChoose;
+    const canChooseClue=!c.revealed&&!over&&g.phase==="clue"&&self?.team===g.turn&&c.type===self.team&&isSpy;
+    button.disabled=!(canChoose||canChooseClue);
     button.dataset.revealed=String(!!c.revealed);
     let art=button.querySelector(".card-art");
     if(c.art&&art?.dataset.art!==c.art){
@@ -186,13 +193,16 @@ function renderGame(){
   $("turnText").textContent=`${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა`;$("turnDot").style.background=g.turn==="blue"?"#25a9d3":"#e55a4c";
   updatePhaseTimer();$("blueScore").textContent=g.remaining.blue;$("redScore").textContent=g.remaining.red;
   $("blueProgress").style.width=`${100-(g.remaining.blue/(g.total?.blue||9))*100}%`;$("redProgress").style.width=`${100-(g.remaining.red/(g.total?.red||9))*100}%`;
-  const myTurn=self?.team===g.turn,roleTitle=!self?.team?"დამკვირვებელი":isSpy?"ხელმძღვანელი":self.role==="operative"?"ოპერატივი":"დამკვირვებელი";
-  const roleText=over?"ოპერაცია დასრულდა — სრული რუკა ღიაა":!self?.team?"თვალი ადევნე ოპერაციას":myTurn?(isSpy&&g.phase==="clue"?"შენი მინიშნების დროა":self.role==="operative"&&g.phase==="guess"?"მონიშნე და დაადასტურე ბარათი":"დაელოდე შენს გუნდს"):"მეტოქის სვლაა";
+  const myTurn=self?.team===g.turn,clueTurn=!over&&isSpy&&self?.team===g.turn&&g.phase==="clue",roleTitle=!self?.team?"დამკვირვებელი":isSpy?"ხელმძღვანელი":self.role==="operative"?"ოპერატივი":"დამკვირვებელი";
+  const cluePickKey=clueTurn?`${state.room.code}:${g.round}:${g.turn}`:"";
+  if(state.cluePickKey!==cluePickKey){state.cluePicks.clear();state.cluePickKey=cluePickKey}
+  const roleText=over?"ოპერაცია დასრულდა — სრული რუკა ღიაა":!self?.team?"თვალი ადევნე ოპერაციას":myTurn?(isSpy&&g.phase==="clue"?"მონიშნე ბარათები და დაწერე მინიშნება":self.role==="operative"&&g.phase==="guess"?"მონიშნე და დაადასტურე ბარათი":"დაელოდე შენს გუნდს"):"მეტოქის სვლაა";
   $("roleBanner").className=`role-banner ${self?.team||""}`;$("roleBanner").innerHTML=`<b>${roleTitle}</b><span>${roleText}</span>`;
   renderTeam("blue","blueTeamGame");renderTeam("red","redTeamGame");
   renderBoard(g,self,over);
+  updateClueSelection();
   $("clueBanner").classList.toggle("hidden",!g.clue);if(g.clue){$("clueWord").textContent=g.clue.word;$("clueNumber").textContent=g.clue.count===99?"∞":g.clue.count}
-  const clueTurn=!over&&isSpy&&myTurn&&g.phase==="clue",guessTurn=!over&&self?.role==="operative"&&myTurn&&g.phase==="guess";
+  const guessTurn=!over&&self?.role==="operative"&&myTurn&&g.phase==="guess";
   $("clueForm").classList.toggle("hidden",!clueTurn);$("guessControls").classList.toggle("hidden",!guessTurn);$("waitingControl").classList.toggle("hidden",over||clueTurn||guessTurn);
   $("gameOverControls").classList.toggle("hidden",!over);
   if(over){$("gameOverText").textContent=`${g.winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს — ყველა ბარათი გახსნილია`;$("rematchBtn").classList.toggle("hidden",!self?.host)}
@@ -248,17 +258,26 @@ document.addEventListener("click",e=>{const button=e.target.closest?.("[data-pla
 document.querySelectorAll("[data-join]").forEach(btn=>btn.onclick=()=>{const[team,role]=btn.dataset.join.split(":");socket.emit("choose-role",{team,role})});
 $("quickTeam").onclick=()=>socket.emit("quick-role",{mode:"auto"});$("observeGame").onclick=()=>socket.emit("quick-role",{mode:"observer"});
 $("startGame").onclick=()=>socket.emit("start-game");
-$("clueForm").onsubmit=e=>{e.preventDefault();socket.emit("give-clue",{word:$("clueInput").value.trim(),count:Number($("clueCount").value)});$("clueInput").value=""};
+$("clueForm").onsubmit=e=>{
+  e.preventDefault();
+  const count=state.cluePicks.size;if(count<1)return toast("მინიმუმ ერთი ბარათი მონიშნე");
+  socket.emit("give-clue",{word:$("clueInput").value.trim(),count});
+  $("clueInput").value="";state.cluePicks.clear();
+  const self=state.room.players.find(p=>p.id===state.selfId);renderBoard(state.room.game,self,false);updateClueSelection()
+};
 $("board").onclick=e=>{
   const card=e.target.closest("[data-card]");if(!card)return;
-  const index=Number(card.dataset.card);
+  const index=Number(card.dataset.card),g=state.room?.game,self=state.room?.players.find(p=>p.id===state.selfId);
+  if(g&&!g.winner&&g.phase==="clue"&&self?.role==="spymaster"&&self.team===g.turn&&g.board[index]?.type===self.team&&!g.board[index]?.revealed){
+    if(state.cluePicks.has(index))state.cluePicks.delete(index);else state.cluePicks.add(index);
+    renderBoard(g,self,false);updateClueSelection();return
+  }
   socket.emit(e.target.closest(".card-confirm")?"confirm-card":"suggest-card",{index})
 };
 $("endTurn").onclick=()=>socket.emit("end-turn");
 $("backToLobby").onclick=$("rematchBtn").onclick=()=>{clearTimeout(state.resultTimer);socket.emit("back-to-lobby");$("resultModal").close()};
 $("resultModal").onclick=e=>{if(e.target===$("resultModal")){clearTimeout(state.resultTimer);$("resultModal").close()}};
 $("chatForm").onsubmit=e=>{e.preventDefault();const text=$("chatInput").value.trim();if(text){socket.emit("send-chat",{text});$("chatInput").value=""}};
-$("clueCount").insertAdjacentHTML("beforeend",'<option value="0">0</option>');for(let i=1;i<=9;i++)$("clueCount").insertAdjacentHTML("beforeend",`<option value="${i}">${i}</option>`);$("clueCount").insertAdjacentHTML("beforeend",'<option value="99">∞</option>');
 
 socket.on("lobby-list",rooms=>{state.rooms=rooms.filter(room=>room.players>0);renderPublicRooms()});
 socket.on("room-joined",({room,token,selfId})=>{localStorage.setItem("ss-token",token);localStorage.setItem("ss-room",room.code);state.selfId=selfId;$("entryModal").close();applyRoom(room);sound("clue")});

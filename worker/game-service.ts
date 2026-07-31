@@ -361,7 +361,7 @@ function handle(clientId: string, event: string, data: any) {
   } else if (event === "give-clue") {
     const game = room.game, word = clean(data?.word, 24).replace(/\s+/g, ""), count = Number(data?.count);
     if (!game || game.winner || player.role !== "spymaster" || player.team !== game.turn || game.phase !== "clue") return;
-    if (word.length < 2 || ![0,1,2,3,4,5,6,7,8,9,99].includes(count)) return send(clientId, "error-message", "მინიშნება და რაოდენობა გადაამოწმე.");
+    if (word.length < 2 || !Number.isInteger(count) || count < 1 || count > 9) return send(clientId, "error-message", "მინიშნება და არჩეული ბარათები გადაამოწმე.");
     const invalid = game.board.some((card: any) => {
       const cardWord = card.word.toLowerCase(), clue = word.toLowerCase(), min = Math.min(cardWord.length, clue.length);
       return !card.revealed && (cardWord === clue || (min >= 4 && (cardWord.startsWith(clue) || clue.startsWith(cardWord))));

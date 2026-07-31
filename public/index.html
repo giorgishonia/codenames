@@ -10,9 +10,9 @@
   <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1">
   <link rel="apple-touch-icon" href="/saidumlo-logo.png?v=2">
   <link rel="preload" as="image" href="/saidumlo-logo.png?v=2">
-  <link rel="stylesheet" href="/style.css?v=16">
+  <link rel="stylesheet" href="/style.css?v=17">
   <script src="/socket.io/socket.io.js" defer></script>
-  <script src="/app.js?v=30" defer></script>
+  <script src="/app.js?v=31" defer></script>
 </head>
 <body>
   <div class="noise"></div>
@@ -146,8 +146,8 @@
         <div class="control-dock">
           <form id="clueForm" class="clue-form hidden">
             <label><span>ერთი სიტყვა</span><input id="clueInput" maxlength="24" placeholder="მაგ. ზღვა" required></label>
-            <label class="number-label"><span>რაოდენობა</span><select id="clueCount"></select></label>
-            <button class="primary">მინიშნება →</button>
+            <div class="clue-selection-count"><span>არჩეულია</span><b id="clueSelectionCount">0</b></div>
+            <button id="giveClueButton" class="primary" disabled>მინიშნება →</button>
           </form>
           <div id="guessControls" class="guess-controls hidden">
             <p id="guessPrompt">მონიშნეთ ბარათები და დასადასტურებლად დააჭირეთ მწვანე ✓-ს — დარჩა <b id="guessesLeft">0</b> ცდა</p>
@@ -183,7 +183,7 @@
       <div class="rules-content">
         <section><h3>მიზანი და როლები</h3><p>ლურჯი და წითელი გუნდები ეჯიბრებიან ერთმანეთს. თითოეულ გუნდს სჭირდება მინიმუმ ერთი <b>ხელმძღვანელი</b> და ერთი <b>ოპერატივი</b>. დაფაზე 25 სიტყვაა. ხელმძღვანელები ხედავენ საიდუმლო ფერებს, ოპერატივები — არა.</p></section>
         <section><h3>მინიშნება</h3><p>ხელმძღვანელი ამბობს მხოლოდ <b>ერთ სიტყვას და ერთ რიცხვს</b>. სიტყვა მნიშვნელობით უნდა უკავშირდებოდეს საკუთარი გუნდის ბარათებს. არ შეიძლება დაფაზე არსებული სიტყვის, მისი აშკარა ფორმის, მართლწერის, ასოების რაოდენობის ან ბარათის მდებარეობის გამოყენება.</p></section>
-        <section class="special-rules"><div><b>0</b><span>არცერთი საკუთარი ბარათი არ უკავშირდება მინიშნებას. გუნდს შეუზღუდავი ცდა აქვს.</span></div><div><b>∞</b><span>რამდენიმე ძველი ან ახალი ბარათია დაკავშირებული. გუნდს შეუზღუდავი ცდა აქვს.</span></div></section>
+        <section><h3>რაოდენობის არჩევა</h3><p>ხელმძღვანელი მინიშნების დაწერამდე მონიშნავს საკუთარი გუნდის მინიმუმ ერთ გაუხსნელ ბარათს. მონიშნული ბარათების რაოდენობა ავტომატურად ხდება მინიშნების რიცხვი და ეს მონიშვნები მხოლოდ ხელმძღვანელს უჩანს.</p></section>
         <section><h3>არჩევა და დადასტურება</h3><p>ოპერატივი ჯერ ერთხელ აჭერს ბარათს და მონიშნავს მას. მხოლოდ ცალკე ღილაკით დადასტურების შემდეგ იხსნება ბარათი. სწორი ფერი თამაშს აგრძელებს; მეტოქის ან ნეიტრალური ბარათი სვლას ასრულებს. მაქსიმუმი არის მინიშნების რიცხვი + 1.</p></section>
         <section><h3>გამარჯვება და შავი აგენტი</h3><p>გუნდი იმარჯვებს, როცა ყველა საკუთარ აგენტს იპოვის. <b>შავი აგენტის</b> გახსნა დაუყოვნებლივ აგებინებს გუნდს.</p></section>
       </div>

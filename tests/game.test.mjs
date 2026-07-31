@@ -80,10 +80,13 @@ test("საჯარო ლობი, 7 მოთამაშე, დაწყ�
 
     const activeSpy=clientByPlayer.get(started.game.turn==="blue"?blueSpy.id:redSpy.id);
     const activeOperative=clientByPlayer.get(started.game.turn==="blue"?blueOperative.id:redOperative.id);
-    const clueReady=until(activeOperative,"room-state",room=>room.game?.phase==="guess"&&room.game?.clue?.count===0);
+    const rejectedClue=wait(activeSpy,"error-message");
     activeSpy.emit("give-clue",{word:"თავისუფლება",count:0});
-    const zeroClue=await clueReady;
-    assert.equal(zeroClue.game.guessesLeft,99,"მინიშნება 0 შეუზღუდავ ცდებს უნდა იძლეოდეს");
+    assert.match(await rejectedClue,/არჩეული ბარათები/);
+    const clueReady=until(activeOperative,"room-state",room=>room.game?.phase==="guess"&&room.game?.clue?.count===2);
+    activeSpy.emit("give-clue",{word:"თავისუფლება",count:2});
+    const countedClue=await clueReady;
+    assert.equal(countedClue.game.guessesLeft,3,"არჩეულ ორ ბარათს ერთი დამატებითი ცდა უნდა მოჰყვეს");
 
     const suggested=until(activeOperative,"room-state",room=>room.game?.pendingGuess?.index===0);
     activeOperative.emit("suggest-card",{index:0});

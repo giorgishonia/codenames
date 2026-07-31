@@ -132,7 +132,7 @@ io.on("connection",socket=>{
   });
   socket.on("give-clue",data=>{
     const found=findPlayer(socket);if(!found)return;const [room,p]=found;touch(room);const g=room.game,word=clean(data?.word,24).replace(/\s+/g,""),count=Number(data?.count);if(!g||g.winner||p.role!=="spymaster"||p.team!==g.turn||g.phase!=="clue")return;
-    if(word.length<2||!([0,1,2,3,4,5,6,7,8,9,99].includes(count)))return socket.emit("error-message","მინიშნება და რაოდენობა გადაამოწმე.");
+    if(word.length<2||!Number.isInteger(count)||count<1||count>9)return socket.emit("error-message","მინიშნება და არჩეული ბარათები გადაამოწმე.");
     if(g.board.some(c=>{const card=c.word.toLowerCase(),clue=word.toLowerCase(),min=Math.min(card.length,clue.length);return!c.revealed&&(card===clue||min>=4&&(card.startsWith(clue)||clue.startsWith(card)))}))return socket.emit("error-message","დაფაზე არსებული სიტყვის ან მისი აშკარა ფორმის გამოყენება არ შეიძლება.");
     g.clue={word,count};g.pendingGuess=null;g.guessesLeft=guessAllowance(count);g.phase="guess";g.phaseDeadline=Math.min(g.roundDeadline,Date.now()+(room.settings||DEFAULT_GAME_SETTINGS).guessTime*1000);g.log.push({actor:p.name,text:`მისცა მინიშნება „${word}“ · ${count===99?"∞":count}.`});emitRoom(room)
   });
