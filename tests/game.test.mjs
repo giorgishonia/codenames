@@ -205,18 +205,23 @@ test("clue count grants one extra guess and a wrong guess ends the turn",async()
 
     const correctIndex=key.game.board.findIndex(card=>card.type===turn);
     const wrongIndex=key.game.board.findIndex((card,index)=>index!==correctIndex&&card.type!==turn&&card.type!=="assassin");
+    const thirdIndex=key.game.board.findIndex((card,index)=>index!==correctIndex&&index!==wrongIndex&&!card.revealed);
     const selectedCorrect=until(operative,"room-state",room=>room.game?.picks?.some(pick=>pick.index===correctIndex));
     operative.emit("suggest-card",{index:correctIndex});
     await selectedCorrect;
     const selectedBoth=until(operative,"room-state",room=>room.game?.picks?.some(pick=>pick.index===correctIndex)&&room.game?.picks?.some(pick=>pick.index===wrongIndex));
     operative.emit("suggest-card",{index:wrongIndex});
     await selectedBoth;
+    const selectedThree=until(operative,"room-state",room=>[correctIndex,wrongIndex,thirdIndex].every(index=>room.game?.picks?.some(pick=>pick.index===index)));
+    operative.emit("suggest-card",{index:thirdIndex});
+    await selectedThree;
     const correctResult=until(operative,"room-state",room=>room.game?.board[correctIndex]?.revealed&&room.game?.guessesLeft===1);
     operative.emit("confirm-card",{index:correctIndex});
     const afterCorrect=await correctResult;
     assert.equal(afterCorrect.game.phase,"guess");
     assert.equal(afterCorrect.game.turn,turn);
     assert.equal(afterCorrect.game.picks.some(pick=>pick.index===wrongIndex),true,"დარჩენილი მონიშვნა სწორი პასუხის შემდეგ უნდა შენარჩუნდეს");
+    assert.equal(afterCorrect.game.picks.some(pick=>pick.index===thirdIndex),true,"რამდენიმე არჩევანი ერთდროულად უნდა შენარჩუნდეს");
 
     const turnEnded=until(operative,"room-state",room=>room.game?.turn!==turn&&room.game?.phase==="clue");
     operative.emit("confirm-card",{index:wrongIndex});

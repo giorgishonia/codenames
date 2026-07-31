@@ -151,10 +151,22 @@ function updateClueSelection(){
   $("clueSelectionCount").textContent=count;
   $("giveClueButton").disabled=count<1
 }
+function fitMobileCardWords(){
+  cancelAnimationFrame(state.wordFitFrame);
+  state.wordFitFrame=requestAnimationFrame(()=>{
+    const mobile=matchMedia("(max-width:640px)").matches;
+    document.querySelectorAll("#board .card-word").forEach(word=>{
+      word.style.fontSize="";
+      if(!mobile)return;
+      let size=10;
+      while(word.scrollWidth>word.clientWidth&&size>5){size-=.5;word.style.fontSize=`${size}px`}
+    })
+  })
+}
 function renderBoard(g,self,over){
   const board=$("board"),fingerprint=g.board.map(c=>c.word).join("\u0001"),isSpy=self?.role==="spymaster";
   if(board.dataset.fingerprint!==fingerprint||board.children.length!==g.board.length){
-    board.innerHTML=g.board.map((c,i)=>`<button class="card" data-card="${i}">${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:""}<span class="card-word">${esc(c.word)}</span></button>`).join("");
+    board.innerHTML=g.board.map((c,i)=>`<button class="card" data-card="${i}">${c.art?`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`:`<img class="card-art card-placeholder-art" src="/cards/neutral-${i%10}.webp" alt="">`}<span class="card-word">${esc(c.word)}</span></button>`).join("");
     board.dataset.fingerprint=fingerprint
   }
   g.board.forEach((c,i)=>{
@@ -171,7 +183,7 @@ function renderBoard(g,self,over){
     if(c.art&&art?.dataset.art!==c.art){
       if(!art){button.insertAdjacentHTML("afterbegin",`<img class="card-art" src="/cards/${esc(c.art)}" alt="">`);art=button.querySelector(".card-art")}
       else art.src=`/cards/${c.art}`;
-      art.dataset.art=c.art
+      art.dataset.art=c.art;art.classList.remove("card-placeholder-art")
     }
     const picksKey=JSON.stringify([canChoose,picks.map(v=>[v.playerId,v.name,v.avatar,v.team])]);
     if(button.dataset.picks!==picksKey){
@@ -181,7 +193,8 @@ function renderBoard(g,self,over){
       if(picks.length&&canChoose)button.insertAdjacentHTML("beforeend",'<span class="card-confirm" aria-hidden="true">✓</span>');
       button.dataset.picks=picksKey
     }
-  })
+  });
+  fitMobileCardWords()
 }
 function renderChat(self){
   const chat=state.room.chat||[];$("roomChat").innerHTML=chat.slice(-20).map(m=>`<div class="chat-message ${m.playerId===state.selfId?"mine":""}"><b>${esc(m.actor)}${m.team?` · ${m.team==="blue"?"ლურჯი":"წითელი"}`:""}</b>${esc(m.text)}</div>`).join("");
@@ -308,4 +321,5 @@ socket.on("connect",()=>{
   else if(pathCode&&!state.room)openEntry("join",pathCode)
 });
 window.addEventListener("popstate",()=>{if(location.pathname==="/"&&!state.room){showScreen("landing");socket.emit("list-rooms")}});
+window.addEventListener("resize",fitMobileCardWords);
 setInterval(updatePhaseTimer,500);syncSettings();refreshRejoin();socket.connect();
