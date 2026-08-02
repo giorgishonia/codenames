@@ -272,6 +272,18 @@ function renderChat(self){
   $("roomChat").scrollTop=$("roomChat").scrollHeight;
   const blocked=self?.role==="spymaster";$("chatInput").disabled=blocked;$("chatForm").querySelector("button").disabled=blocked;$("chatHint").textContent=blocked?"ხელმძღვანელი თამაშის დროს ჩუმად უნდა იყოს.":"საუბარი ოთახის ყველა მოთამაშეს ესმის."
 }
+function renderGameLog(g){
+  const entries=g.log.slice(-16),playerTeam=new Map(state.room.players.map(player=>[player.name,player.team]));
+  $("gameLog").innerHTML=entries.map((entry,index)=>{
+    const text=entry.text||"",isClue=text.includes("მისცა მინიშნება"),isGuess=text.includes("დაადასტურა");
+    const result=isGuess?(text.includes("შავი აგენტი")?"assassin":text.includes("ნეიტრალური")?"neutral":text.includes("ლურჯი")?"blue":"red"):"";
+    const team=playerTeam.get(entry.actor)||(text.includes("ლურჯ")?"blue":text.includes("წითელ")?"red":"neutral");
+    const kind=isClue?"clue":isGuess?"guess":"system",icon=isClue?"✦":isGuess?(result==="assassin"?"☠":"✓"):"↻";
+    const label=isClue?"მინიშნება":isGuess?"გახსნილი ბარათი":"თამაშის განახლება";
+    return `<article class="log-entry ${team} ${kind} ${result} ${index===entries.length-1?"latest":""}"><span class="log-icon">${icon}</span><div class="log-copy"><span class="log-meta"><b>${esc(entry.actor||"სისტემა")}</b><i>${label}</i></span><p>${esc(text)}</p></div></article>`
+  }).join("");
+  $("gameLog").scrollTop=$("gameLog").scrollHeight
+}
 function renderGame(){
   const g=state.room.game,self=state.room.players.find(p=>p.id===state.selfId),isSpy=self?.role==="spymaster",over=!!g.winner;
   $("turnText").textContent=`${g.turn==="blue"?"ლურჯების":"წითლების"} სვლაა`;$("turnDot").style.background=g.turn==="blue"?"#25a9d3":"#e55a4c";
@@ -291,7 +303,7 @@ function renderGame(){
   $("gameOverControls").classList.toggle("hidden",!over);
   if(over){$("gameOverText").textContent=`${g.winner==="blue"?"ლურჯებმა":"წითლებმა"} გაიმარჯვეს — ყველა ბარათი გახსნილია`;$("rematchBtn").classList.toggle("hidden",!self?.host)}
   $("guessPrompt").innerHTML=`მონიშნეთ ერთი ან რამდენიმე ბარათი და დააჭირეთ მწვანე ✓-ს — დარჩა <b id="guessesLeft">${g.guessesLeft===99?"∞":g.guessesLeft}</b> ცდა`;
-  $("gameLog").innerHTML=g.log.slice(-12).reverse().map(x=>`<div class="log-entry"><b>${esc(x.actor||"სისტემა")}</b> ${esc(x.text)}</div>`).join("");
+  renderGameLog(g);
   renderChat(self);
   const revealed=g.board.filter(c=>c.revealed).length;if(revealed>state.lastRevealed)sound("reveal");if(state.lastPhase==="clue"&&g.phase==="guess")sound("clue");state.lastRevealed=revealed;state.lastPhase=g.phase
 }

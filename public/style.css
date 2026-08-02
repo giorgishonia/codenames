@@ -548,3 +548,91 @@ button{cursor:pointer}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media(max-width:560px){.timer-settings,.word-category-options{grid-template-columns:1fr}.word-pack-settings>div:first-child{display:block}.word-pack-settings>div>small{display:block;margin-top:4px}.player-admin{width:100%;margin:4px 0 0 56px}}
+
+/* ==========================================================================
+   Focused game table — compact team rails, tactile cards and a readable feed
+   ========================================================================== */
+@media(min-width:861px){
+  .game{background:repeating-linear-gradient(0deg,#182b3b 0,#182b3b 9px,#1d3244 10px,#1d3244 18px)}
+  .game:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(900px 520px at 50% 14%,rgba(255,255,255,.055),transparent 70%),linear-gradient(90deg,rgba(0,0,0,.16),transparent 18%,transparent 82%,rgba(0,0,0,.16))}
+  .game-header{height:64px;padding:0 18px;background:linear-gradient(180deg,#070910,#0c1119);border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 5px 18px rgba(0,0,0,.35)}
+  .game-header:after{display:none}
+  .game-header .brand{font-size:14px;color:#dce4ed}
+  .game-header .brand-mark{width:38px;height:38px;border-radius:12px;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .game-header .turn-status{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:#111a26;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  .game-header .turn-status span{width:9px;height:9px;box-shadow:0 0 0 3px rgba(255,255,255,.08)}
+  .game-header .turn-status b{font-size:13px;white-space:nowrap}
+  .game-header .turn-status small{padding-left:9px;border-left:1px solid rgba(255,255,255,.13);white-space:nowrap;font-size:9px}
+  .game-header .icon-btn,.game-header .secondary{height:38px;border-radius:999px;background:#0e141d;border-color:rgba(255,255,255,.72)}
+
+  .game-layout{position:relative;height:calc(100vh - 64px);grid-template-columns:230px minmax(580px,1fr) 248px;gap:12px;padding:12px}
+  .side-panel{position:relative;z-index:1;gap:9px;padding:0;overflow:hidden}
+  .side-panel .score-head{order:2;flex:0 0 68px;min-height:68px;padding:10px 14px;border:3px solid;border-radius:11px;box-shadow:0 3px 0 rgba(0,0,0,.26)}
+  .blue-panel .score-head{border-color:#52c9ff;background:#117aad;box-shadow:0 3px 0 #07516f}
+  .red-panel .score-head{border-color:#b7ef64;background:#ff5a49;box-shadow:0 3px 0 #9c3026}
+  .score-head:after{right:-28px;top:-52px;width:120px;height:120px;border-width:18px}
+  .score-head span{font-size:15px;letter-spacing:.03em}
+  .score-head span:after{content:" დარჩა";font-size:8px;opacity:.72}
+  .score-head b{font-size:36px}
+  .team-progress{order:3;height:5px;margin:-6px 7px 0;background:rgba(0,0,0,.24)}
+  .game-players{order:1;display:flex;flex-direction:column;gap:8px}
+  .roster-group{padding:10px 7px 9px;border:3px solid;border-radius:22px;background:none!important;box-shadow:0 3px 0 rgba(0,0,0,.24)}
+  .blue-panel .roster-group{border-color:#58caff;background:linear-gradient(155deg,#147eb2,#277fb0)!important}
+  .red-panel .roster-group{border-color:#b7ef64;background:linear-gradient(155deg,#ff594a,#ff7545)!important}
+  .roster-group h4{margin:0 0 8px;font-size:12px;letter-spacing:.04em;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.28)}
+  .roster-row{gap:7px;min-height:52px}
+  .game-player{width:62px;gap:3px}
+  .game-player .agent-avatar{width:48px;height:48px;border-width:4px;background-color:#f4c699;box-shadow:0 2px 0 rgba(0,0,0,.24)}
+  .blue-panel .game-player .agent-avatar{border-color:#bfe9f6}
+  .red-panel .game-player .agent-avatar{border-color:#ffd4a3}
+  .game-player>span:not(.agent-avatar){margin-top:-7px;max-width:72px;padding:3px 8px;border-radius:7px;background:#093e5b;font-size:10px;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+  .red-panel .game-player>span:not(.agent-avatar){background:#a52611}
+  .blue-panel:after{display:none}
+
+  .board-zone{z-index:1;grid-template-rows:46px minmax(0,1fr) auto;gap:9px;padding:8px 10px 10px;border:0;border-radius:12px;background:rgba(9,20,29,.22);box-shadow:none}
+  .role-banner{padding:7px 10px;border:0;border-radius:8px;background:rgba(9,16,23,.68)}
+  .clue-banner{padding:5px 5px 5px 15px;border-radius:9px;background:#111820;box-shadow:0 3px 0 rgba(0,0,0,.28)}
+  .clue-banner b{font-size:18px}
+  .clue-banner i{width:32px;height:32px;border-radius:7px}
+  .board{gap:9px}
+  .card{border:2px solid rgba(68,45,29,.38);border-radius:11px;background-color:#ffd0a6;box-shadow:0 3px 0 #8b5c3f,inset 0 0 0 2px rgba(255,255,255,.35)}
+  .card:not(.revealed):hover{transform:translateY(-2px);box-shadow:0 6px 0 #6f4933,0 10px 18px rgba(0,0,0,.28),inset 0 0 0 2px rgba(255,255,255,.46)}
+  .card-art{height:calc(100% - 37px)}
+  .card-word{left:7px;right:7px;bottom:7px;padding:7px 3px;border:2px solid rgba(68,45,29,.32);border-radius:6px;background:#9d7653;color:#fff;font-size:clamp(11px,1.25vw,18px);box-shadow:0 2px 0 rgba(70,40,22,.32),inset 0 1px rgba(255,255,255,.24)}
+  .card.blue .card-word,.card.key-blue:not(.revealed) .card-word{background:#225f8d;border-color:#0d456e}
+  .card.red .card-word,.card.key-red:not(.revealed) .card-word{background:#9b2c18;border-color:#762010}
+  .card.neutral .card-word,.card.key-neutral:not(.revealed) .card-word{background:#9d7653;border-color:#79563a}
+  .card.assassin .card-word,.card.key-assassin:not(.revealed) .card-word{background:#111;border-color:#000}
+  .control-dock{min-height:58px;padding:7px;border:0;border-radius:10px;background:rgba(8,17,25,.72);box-shadow:0 2px 0 rgba(0,0,0,.3)}
+
+  .red-panel .log-wrap{order:4;min-height:176px;flex:1}
+  .red-panel .chat-wrap{order:5;flex:0 0 auto}
+  .log-wrap,.chat-wrap{padding:9px;border:2px solid rgba(255,255,255,.18);border-radius:18px;background:linear-gradient(180deg,#45494c,#303335);box-shadow:0 3px 0 rgba(0,0,0,.3)}
+  .log-wrap h3{display:flex;align-items:center;justify-content:space-between;margin:0 2px 8px;text-align:left;color:#e8eaec;font-size:12px;letter-spacing:.04em}
+  .log-wrap h3 small{font-family:var(--font-body);font-size:8px;font-weight:500;letter-spacing:0;color:#aeb4ba;text-transform:none}
+  .game-log{gap:6px;max-height:none;height:100%;padding-right:3px;font-size:10px}
+  .log-entry{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr);gap:7px;padding:7px;border:0;border-left:4px solid #8e969d;border-radius:9px;background:#f3f5f6;color:#222;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .log-entry.blue{border-left-color:#079ee8;background:#e6f6fd}
+  .log-entry.red{border-left-color:#ff4f42;background:#ffebe8}
+  .log-entry.assassin{border-left-color:#111;background:#e4e4e4}
+  .log-entry.latest:after{content:"";position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:#7fdc12;box-shadow:0 0 0 2px rgba(127,220,18,.2)}
+  .log-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#747b81;color:#fff;font-family:system-ui,sans-serif;font-size:15px;font-weight:900}
+  .log-entry.blue .log-icon{background:#069dde}
+  .log-entry.red .log-icon{background:#f14c3e}
+  .log-entry.assassin .log-icon{background:#111}
+  .log-copy{min-width:0}
+  .log-meta{display:flex;align-items:center;gap:5px;padding-right:7px}
+  .log-meta b{max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#15191c;font-size:9px}
+  .log-meta i{padding:2px 5px;border-radius:4px;background:rgba(0,0,0,.08);color:#596168;font-size:7px;font-style:normal;white-space:nowrap}
+  .log-entry p{margin:3px 0 0;color:#353b40;font-size:9px;line-height:1.35}
+}
+@media(min-width:861px) and (max-width:1180px){
+  .game-layout{grid-template-columns:184px minmax(500px,1fr) 210px;gap:8px;padding:8px}
+  .game-player{width:52px}.game-player .agent-avatar{width:40px;height:40px}
+  .roster-group{padding-left:4px;padding-right:4px}.board{gap:6px}.card-word{font-size:11px}
+  .game-header .turn-status small{display:none}
+}
+@media(max-height:780px) and (min-width:861px){
+  .game-layout{padding-top:8px;padding-bottom:8px}.roster-group{padding-top:7px;padding-bottom:7px}.game-player .agent-avatar{width:38px;height:38px}.game-player{width:51px}
+  .side-panel .score-head{flex-basis:54px;min-height:54px}.red-panel .chat-wrap{display:none}.red-panel .log-wrap{min-height:190px}
+}
